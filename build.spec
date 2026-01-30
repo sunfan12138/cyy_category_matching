@@ -6,10 +6,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[
-        ('model', 'model'),
-        ('excel', 'excel'),
-    ],
+    datas=[],
     hiddenimports=[
         'parser',
         'app',
