@@ -54,14 +54,14 @@ def match_by_similarity(
     store_text: str,
     verified_brands: list[VerifiedBrand],
     threshold: float = 0.97,
-) -> list[CategoryRule]:
+) -> tuple[list[CategoryRule], VerifiedBrand | None, float]:
     """
     与已校验品牌做相似度比对，若存在相似度 >= threshold 的品牌，则返回其原子品类（单条规则）。
-    优先使用缓存的 embedding；若无缓存则逐条调用 text_similarity。
+    返回 (匹配规则列表, 命中的品牌, 相似度)；无匹配时为 ([], None, 0.0)。
     """
     store_text = store_text.strip()
     if not store_text or not verified_brands:
-        return []
+        return [], None, 0.0
 
     use_cached = any(vb.embedding is not None for vb in verified_brands)
     if use_cached:
@@ -78,7 +78,7 @@ def match_by_similarity(
                 best_score = s
                 best_idx = i
         if best_idx < 0 or best_score < threshold:
-            return []
+            return [], None, 0.0
         best_brand = verified_brands[best_idx]
     else:
         best_score = -1.0
@@ -91,12 +91,12 @@ def match_by_similarity(
                 best_score = score
                 best_brand = vb
         if best_brand is None or best_score < threshold:
-            return []
+            return [], None, 0.0
 
-    return [
-        CategoryRule(
-            level1_category="",
-            category_code=best_brand.brand_code,
-            atomic_category=best_brand.atomic_category,
-        )
-    ]
+    # 相似度匹配无品类编码，品牌编码仅出现在「原品牌编码」列
+    rule = CategoryRule(
+        level1_category="",
+        category_code="",
+        atomic_category=best_brand.atomic_category,
+    )
+    return [rule], best_brand, best_score

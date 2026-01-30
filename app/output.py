@@ -5,9 +5,18 @@ from pathlib import Path
 import openpyxl  # type: ignore[import-untyped]
 from openpyxl.styles import Font  # type: ignore[import-untyped]
 
-ResultRow = tuple[str, str, str, str, str]
+ResultRow = tuple[str, str, str, str, str, str, str, str]
 
-HEADERS = ("输入品类", "一级原子品类", "品类编码", "原子品类", "匹配方式")
+HEADERS = (
+    "输入品类",
+    "一级原子品类",
+    "品类编码",
+    "原子品类",
+    "匹配方式",
+    "原品牌编码",
+    "原品牌名",
+    "相似度",
+)
 
 
 def write_result_excel(rows: list[ResultRow], output_path: Path) -> None:
@@ -23,7 +32,7 @@ def write_result_excel(rows: list[ResultRow], output_path: Path) -> None:
     for row_idx, row_data in enumerate(rows, start=2):
         for col_idx, value in enumerate(row_data, start=1):
             cell = ws.cell(row=row_idx, column=col_idx, value=value)
-            if row_data[4] == "未匹配":
+            if len(row_data) > 4 and row_data[4] == "未匹配":
                 cell.font = red_font
     output_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_path)
