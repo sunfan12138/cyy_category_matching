@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import openpyxl  # type: ignore[import-untyped]
+from tqdm import tqdm  # type: ignore[import-untyped]
 
 # 关键词单元格内分隔符：逗号、顿号
 KEYWORD_SEP = ",，、"
@@ -93,7 +94,8 @@ def load_rules(excel_path: str | Path) -> tuple[RuleSheetMeta, list[CategoryRule
     meta = RuleSheetMeta(logic_descriptions=logic_row, field_descriptions=field_row)
 
     rules: list[CategoryRule] = []
-    for r in range(3, max_row + 1):
+    row_range = range(3, max_row + 1)
+    for r in tqdm(row_range, desc="解析规则", unit="行"):
         row = [ws.cell(r, c).value for c in range(1, max_col + 1)]
         rule = _row_to_rule(row, logic_row, field_row)
         rules.append(rule)
