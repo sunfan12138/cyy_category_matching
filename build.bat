@@ -28,7 +28,7 @@ echo.
 
 echo [3/3] 开始打包...
 echo 打包配置文件: build.spec
-echo 输出目录: dist\CategoryMatching
+echo 输出文件: dist\CategoryMatching.exe
 echo.
 uv run pyinstaller --clean build.spec
 if %errorlevel% neq 0 (
@@ -40,10 +40,10 @@ echo.
 
 echo ========================================
 echo 打包成功！
-echo 可执行文件位于: dist\CategoryMatching\CategoryMatching.exe
+echo 可执行文件位于: dist\CategoryMatching.exe
 echo.
 echo 使用说明:
-echo 1. 将 dist\CategoryMatching 文件夹复制到目标机器
+echo 1. 将 dist\CategoryMatching.exe 复制到目标机器
 echo 2. 确保 excel 文件夹包含必要的规则文件
 echo 3. 确保 model 文件夹包含模型文件
 echo 4. 运行 CategoryMatching.exe 开始使用
