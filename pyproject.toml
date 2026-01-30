@@ -12,6 +12,11 @@ dependencies = [
     "tqdm>=4.66.0",
 ]
 
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.0.0",
+]
+
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
 
