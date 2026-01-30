@@ -7,6 +7,7 @@
 - matching: 规则匹配与相似度（match_rule, match_store, text_similarity, match_by_similarity）
 """
 
+from .embedding import ensure_model_loaded, fill_brand_embeddings
 from .loaders import load_rules, load_verified_brands
 from .matching import match_by_similarity, match_rule, match_store, text_similarity
 from .models import CategoryRule, RuleSheetMeta, VerifiedBrand
@@ -15,6 +16,8 @@ __all__ = [
     "CategoryRule",
     "RuleSheetMeta",
     "VerifiedBrand",
+    "ensure_model_loaded",
+    "fill_brand_embeddings",
     "load_rules",
     "load_verified_brands",
     "match_rule",

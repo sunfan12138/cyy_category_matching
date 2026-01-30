@@ -10,7 +10,7 @@ from app import (
     run_batch_match,
     write_result_excel,
 )
-from parser import load_rules, load_verified_brands
+from parser import ensure_model_loaded, fill_brand_embeddings, load_rules, load_verified_brands
 
 
 def main() -> None:
@@ -20,10 +20,15 @@ def main() -> None:
     rules_path = excel_dir / "原子品类关键词.xlsx"
     verified_path = excel_dir / "校验过的品牌对应原子品类.xlsx"
 
+    print("正在下载/加载 BGE 模型...")
+    ensure_model_loaded()
     print("解析规则与已校验品牌...")
     _, rules = load_rules(rules_path)
     verified_brands = load_verified_brands(verified_path)
     print(f"规则 {len(rules)} 条，已校验品牌 {len(verified_brands)} 条。")
+    print("正在编码品牌名向量...")
+    fill_brand_embeddings(verified_brands)
+    print("品牌向量缓存完成。")
     print("请拖动或输入待匹配品类文件路径（每行一个品类），输入 q 退出。\n")
 
     pending_path = " ".join(sys.argv[1:]).strip() if len(sys.argv) > 1 else None

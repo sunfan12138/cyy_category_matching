@@ -57,24 +57,41 @@ def match_by_similarity(
 ) -> list[CategoryRule]:
     """
     与已校验品牌做相似度比对，若存在相似度 >= threshold 的品牌，则返回其原子品类（单条规则）。
-    否则返回空列表。
+    优先使用缓存的 embedding；若无缓存则逐条调用 text_similarity。
     """
     store_text = store_text.strip()
     if not store_text or not verified_brands:
         return []
 
-    best_score = -1.0
-    best_brand: VerifiedBrand | None = None
-    for vb in verified_brands:
-        if not vb.brand_name:
-            continue
-        score = text_similarity(store_text, vb.brand_name)
-        if score >= threshold and score > best_score:
-            best_score = score
-            best_brand = vb
+    use_cached = any(vb.embedding is not None for vb in verified_brands)
+    if use_cached:
+        from .embedding import similarity_scores_with_cached
 
-    if best_brand is None or best_score < threshold:
-        return []
+        scores = similarity_scores_with_cached(store_text, verified_brands)
+        best_score = -1.0
+        best_idx = -1
+        for i, vb in enumerate(verified_brands):
+            if not vb.brand_name:
+                continue
+            s = scores[i] if i < len(scores) else 0.0
+            if s >= threshold and s > best_score:
+                best_score = s
+                best_idx = i
+        if best_idx < 0 or best_score < threshold:
+            return []
+        best_brand = verified_brands[best_idx]
+    else:
+        best_score = -1.0
+        best_brand = None
+        for vb in verified_brands:
+            if not vb.brand_name:
+                continue
+            score = text_similarity(store_text, vb.brand_name)
+            if score >= threshold and score > best_score:
+                best_score = score
+                best_brand = vb
+        if best_brand is None or best_score < threshold:
+            return []
 
     return [
         CategoryRule(

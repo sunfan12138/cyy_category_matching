@@ -40,3 +40,4 @@ class VerifiedBrand:
     brand_name: str = ""  # 品牌名称
     brand_keywords: str = ""  # 品牌关键词（，表示同时包含）
     atomic_category: str = ""  # 原子品类
+    embedding: list[float] | None = None  # BGE 文本向量，加载后批量编码填充
