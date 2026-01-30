@@ -13,8 +13,9 @@ from .models import CategoryRule, RuleSheetMeta, VerifiedBrand
 KEYWORD_SEP = ",，、"
 
 
-def _cell_value(cell: Any) -> str:
-    v = cell.value
+def _cell_value(cell_or_value: Any) -> str:
+    """支持 openpyxl Cell 或裸值（如 iter_rows values_only=True）。"""
+    v = getattr(cell_or_value, "value", cell_or_value)
     if v is None:
         return ""
     return str(v).strip()
@@ -104,13 +105,22 @@ def load_rules(excel_path: str | Path) -> tuple[RuleSheetMeta, list[CategoryRule
 
     max_col = ws.max_column
     max_row = ws.max_row
-    logic_row = [_cell_value(ws.cell(1, c)) for c in range(1, max_col + 1)]
-    field_row = [_cell_value(ws.cell(2, c)) for c in range(1, max_col + 1)]
-    meta = RuleSheetMeta(logic_descriptions=logic_row, field_descriptions=field_row)
+    # 仅读前两行表头
+    row1 = next(ws.iter_rows(min_row=1, max_row=1, min_col=1, max_col=max_col, values_only=True))
+    row2 = next(ws.iter_rows(min_row=2, max_row=2, min_col=1, max_col=max_col, values_only=True))
+    logic_row = [_cell_value(v) for v in (row1 if row1 else [])]
+    field_row = [_cell_value(v) for v in (row2 if row2 else [])]
+    # 补齐长度
+    while len(logic_row) < max_col:
+        logic_row.append("")
+    while len(field_row) < max_col:
+        field_row.append("")
+    meta = RuleSheetMeta(logic_descriptions=logic_row[:max_col], field_descriptions=field_row[:max_col])
 
     rules: list[CategoryRule] = []
-    for r in tqdm(range(3, max_row + 1), desc="解析规则", unit="行"):
-        row = [ws.cell(r, c).value for c in range(1, max_col + 1)]
+    data_rows = ws.iter_rows(min_row=3, max_row=max_row, min_col=1, max_col=max_col, values_only=True)
+    for row_tuple in tqdm(data_rows, total=max_row - 2, desc="解析规则", unit="行"):
+        row = list(row_tuple) if row_tuple else []
         rules.append(_row_to_rule(row, logic_row, field_row))
     wb.close()
     return meta, rules
@@ -137,7 +147,8 @@ def load_verified_brands(excel_path: str | Path) -> list[VerifiedBrand]:
         wb.close()
         return []
 
-    header = [_cell_value(ws.cell(1, c)) for c in range(1, max_col + 1)]
+    header_row = next(ws.iter_rows(min_row=1, max_row=1, min_col=1, max_col=max_col, values_only=True))
+    header = [_cell_value(v) for v in (header_row or [])]
     col_code = _find_column(header, ("品牌编码",))
     col_name = _find_column(header, ("品牌名称",))
     col_keywords = _find_column(header, ("品牌关键词（，表示同时包含）",))
@@ -147,13 +158,15 @@ def load_verified_brands(excel_path: str | Path) -> list[VerifiedBrand]:
         return []
 
     result: list[VerifiedBrand] = []
-    for r in range(2, max_row + 1):
-        brand_name = _cell_value(ws.cell(r, col_name + 1))
+    data_rows = ws.iter_rows(min_row=2, max_row=max_row, min_col=1, max_col=max_col, values_only=True)
+    for row_tuple in tqdm(data_rows, total=max_row - 1, desc="解析已校验品牌", unit="行"):
+        row = list(row_tuple) if row_tuple else []
+        brand_name = _cell_value(row[col_name]) if col_name < len(row) else ""
         if not brand_name:
             continue
-        code_cell = ws.cell(r, col_code + 1).value if col_code is not None else ""
-        keywords = _cell_value(ws.cell(r, col_keywords + 1)) if col_keywords is not None else ""
-        atomic = _cell_value(ws.cell(r, col_atomic + 1))
+        code_cell = row[col_code] if col_code is not None and col_code < len(row) else ""
+        keywords = _cell_value(row[col_keywords]) if col_keywords is not None and col_keywords < len(row) else ""
+        atomic = _cell_value(row[col_atomic]) if col_atomic < len(row) else ""
         result.append(
             VerifiedBrand(
                 brand_code=code_cell if code_cell != "" else "",
