@@ -56,7 +56,7 @@ def match_by_similarity(
     threshold: float = 0.97,
 ) -> tuple[list[CategoryRule], VerifiedBrand | None, float]:
     """
-    与已校验品牌做相似度比对，若存在相似度 >= threshold 的品牌，则返回其原子品类（单条规则）。
+    与已校验品牌做相似度比对，取相似度最高的品牌；若最高分 >= threshold 则返回其原子品类（单条规则）。
     返回 (匹配规则列表, 命中的品牌, 相似度)；无匹配时为 ([], None, 0.0)。
     """
     store_text = store_text.strip()
@@ -74,7 +74,7 @@ def match_by_similarity(
             if not vb.brand_name:
                 continue
             s = scores[i] if i < len(scores) else 0.0
-            if s >= threshold and s > best_score:
+            if s > best_score:
                 best_score = s
                 best_idx = i
         if best_idx < 0 or best_score < threshold:
@@ -87,7 +87,7 @@ def match_by_similarity(
             if not vb.brand_name:
                 continue
             score = text_similarity(store_text, vb.brand_name)
-            if score >= threshold and score > best_score:
+            if score > best_score:
                 best_score = score
                 best_brand = vb
         if best_brand is None or best_score < threshold:

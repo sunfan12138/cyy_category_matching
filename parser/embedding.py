@@ -11,8 +11,6 @@ from .models import VerifiedBrand
 # 中文场景推荐，体积与速度平衡；ModelScope / HuggingFace 均可用此 ID
 BGE_MODEL_ID = "BAAI/bge-small-zh-v1.5"
 
-# 项目根目录下的 model 目录，用于存放 BGE 模型
-_model_dir = Path(__file__).resolve().parent.parent / "model"
 _model = None
 
 
@@ -23,8 +21,11 @@ def _get_model():
         from modelscope import snapshot_download  # type: ignore[import-untyped]
         from sentence_transformers import SentenceTransformer  # type: ignore[import-untyped]
 
-        _model_dir.mkdir(parents=True, exist_ok=True)
-        local_dir = snapshot_download(BGE_MODEL_ID, cache_dir=str(_model_dir))
+        from paths import get_model_dir
+
+        model_dir = get_model_dir()
+        model_dir.mkdir(parents=True, exist_ok=True)
+        local_dir = snapshot_download(BGE_MODEL_ID, cache_dir=str(model_dir))
         _model = SentenceTransformer(local_dir)
     return _model
 

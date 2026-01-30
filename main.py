@@ -10,13 +10,13 @@ from app import (
     run_batch_match,
     write_result_excel,
 )
+from paths import get_excel_dir, get_output_dir
 from parser import ensure_model_loaded, fill_brand_embeddings, load_rules, load_verified_brands
 
 
 def main() -> None:
-    base_dir = Path(__file__).resolve().parent
-    excel_dir = base_dir / "excel"
-    output_dir = base_dir / "output"
+    excel_dir = get_excel_dir()
+    output_dir = get_output_dir()
     rules_path = excel_dir / "原子品类关键词.xlsx"
     verified_path = excel_dir / "校验过的品牌对应原子品类.xlsx"
 
