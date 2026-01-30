@@ -43,12 +43,11 @@ def match_store(text: str, rules: list[CategoryRule]) -> list[CategoryRule]:
 
 def text_similarity(text_a: str, text_b: str) -> float:
     """
-    计算两段文本的相似度，返回值在 [0, 1]。
-    当前为空实现，后续可替换为编辑距离、余弦相似度等。
+    计算两段文本的相似度，返回值在 [0, 1]。基于 sentence-transformers + BGE 的余弦相似度。
     """
-    _ = text_a
-    _ = text_b
-    return 0.0
+    from .embedding import cosine_similarity_0_1
+
+    return cosine_similarity_0_1(text_a, text_b)
 
 
 def match_by_similarity(

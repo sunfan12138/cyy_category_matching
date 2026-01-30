@@ -11,3 +11,6 @@ wheels/
 
 # Output
 output/
+
+# BGE 模型缓存（sentence-transformers 下载到此目录）
+model/
