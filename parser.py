@@ -62,6 +62,74 @@ class RuleSheetMeta:
     field_descriptions: list[str] = field(default_factory=list)  # 字段解释，每列对应
 
 
+@dataclass
+class VerifiedBrand:
+    """已校验过的品牌及其对应原子品类（与「校验过的品牌对应原子品类.xlsx」列一致）。"""
+
+    brand_code: str | int = ""  # 品牌编码
+    brand_name: str = ""  # 品牌名称
+    brand_keywords: str = ""  # 品牌关键词（，表示同时包含）
+    atomic_category: str = ""  # 原子品类
+
+
+def load_verified_brands(excel_path: str | Path) -> list[VerifiedBrand]:
+    """
+    解析「校验过的品牌对应原子品类」Excel，第 1 行为表头，第 2 行起为数据。
+    表头列：品牌编码、品牌名称、品牌关键词（，表示同时包含）、原子品类。
+    """
+    path = Path(excel_path)
+    if not path.exists():
+        return []
+
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    ws = wb.active
+    if ws is None:
+        wb.close()
+        return []
+
+    max_col = ws.max_column
+    max_row = ws.max_row
+    if max_row < 2:
+        wb.close()
+        return []
+
+    header = [_cell_value(ws.cell(1, c)) for c in range(1, max_col + 1)]
+    col_code = _find_column(header, ("品牌编码",))
+    col_name = _find_column(header, ("品牌名称",))
+    col_keywords = _find_column(header, ("品牌关键词（，表示同时包含）",))
+    col_atomic = _find_column(header, ("原子品类",))
+    if col_name is None or col_atomic is None:
+        wb.close()
+        return []
+
+    result: list[VerifiedBrand] = []
+    for r in range(2, max_row + 1):
+        brand_name = _cell_value(ws.cell(r, col_name + 1))
+        if not brand_name:
+            continue
+        code_cell = ws.cell(r, col_code + 1).value if col_code is not None else ""
+        keywords = _cell_value(ws.cell(r, col_keywords + 1)) if col_keywords is not None else ""
+        atomic = _cell_value(ws.cell(r, col_atomic + 1))
+        result.append(
+            VerifiedBrand(
+                brand_code=code_cell if code_cell != "" else "",
+                brand_name=brand_name,
+                brand_keywords=keywords,
+                atomic_category=atomic,
+            )
+        )
+    wb.close()
+    return result
+
+
+def _find_column(header: list[str], names: tuple[str, ...]) -> int | None:
+    """在表头中查找任一名称所在的列索引（0-based），未找到返回 None。"""
+    for i, h in enumerate(header):
+        if h and h.strip() in names:
+            return i
+    return None
+
+
 def load_rules(excel_path: str | Path) -> tuple[RuleSheetMeta, list[CategoryRule]]:
     """
     从 Excel 解析原子品类关键词规则。
@@ -143,6 +211,52 @@ def match_rule(text: str, rule: CategoryRule) -> bool:
 def match_store(text: str, rules: list[CategoryRule]) -> list[CategoryRule]:
     """对门店文本循环所有规则，返回匹配的规则列表（即对应的原子分类）。"""
     return [r for r in rules if match_rule(text, r)]
+
+
+def text_similarity(text_a: str, text_b: str) -> float:
+    """
+    计算两段文本的相似度，返回值在 [0, 1]。
+    当前为空实现，后续可替换为编辑距离、余弦相似度等。
+    """
+    # 空实现：始终返回 0，不判定为已知品牌
+    _ = text_a
+    _ = text_b
+    return 0.0
+
+
+def match_by_similarity(
+    store_text: str,
+    verified_brands: list[VerifiedBrand],
+    threshold: float = 0.97,
+) -> list[CategoryRule]:
+    """
+    与已校验品牌做相似度比对，若存在相似度 >= threshold 的品牌，则返回其原子品类（单条规则）。
+    否则返回空列表。
+    """
+    store_text = store_text.strip()
+    if not store_text or not verified_brands:
+        return []
+
+    best_score = -1.0
+    best_brand: VerifiedBrand | None = None
+    for vb in verified_brands:
+        if not vb.brand_name:
+            continue
+        score = text_similarity(store_text, vb.brand_name)
+        if score >= threshold and score > best_score:
+            best_score = score
+            best_brand = vb
+
+    if best_brand is None or best_score < threshold:
+        return []
+
+    return [
+        CategoryRule(
+            level1_category="",
+            category_code=best_brand.brand_code,
+            atomic_category=best_brand.atomic_category,
+        )
+    ]
 
 
 def _cell_value(cell: Any) -> str:
