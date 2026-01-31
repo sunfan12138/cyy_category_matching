@@ -1,7 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
-# 使用 onedir 模式：输出目录 dist/CategoryMatching/，内含 exe 与全部 DLL 依赖，
-# 发布/分发时需打包整个目录（或上传该目录的 zip），不可只上传单个 exe。
-# excludes 与 strip 用于缩小体积。
+# OneFile 备用构建：生成单个 exe，运行时解压到 %TEMP%。
+# 若 onedir 版报 "Failed to load Python DLL"，可尝试本版本（从临时目录加载，路径通常为纯英文）。
 
 block_cipher = None
 
@@ -48,9 +47,10 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.datas,
     [],
-    exclude_binaries=True,
-    name='CategoryMatching',
+    name='CategoryMatching-OneFile',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -61,14 +61,4 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=False,
-    upx_exclude=[],
-    name='CategoryMatching',
 )

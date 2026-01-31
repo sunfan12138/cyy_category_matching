@@ -1,0 +1,36 @@
+========================================
+品类匹配工具 - 使用说明
+========================================
+
+【运行方式】
+1. 将 excel、model、output 文件夹放在与 CategoryMatching.exe 同一目录下。
+2. 双击 CategoryMatching.exe 或在命令行运行。
+
+【若出现 "Failed to load Python DLL" 或 "LoadLibrary" 报错】
+请依次尝试：
+
+1. 路径仅使用英文
+   将整个 CategoryMatching 文件夹移动到纯英文路径下再运行，例如：
+   C:\CategoryMatching
+   避免路径中含有中文、空格或特殊符号。
+
+2. 用“运行诊断.bat”查看报错路径
+   双击 运行诊断.bat，会显示当前目录并启动程序。
+   若报错里出现的路径含有中文，请按第 1 步移到英文路径。
+
+3. 安装 VC++ 运行库
+   安装 Microsoft Visual C++ Redistributable 2015-2022 (x64)：
+   https://aka.ms/vs/17/release/vc_redist.x64.exe
+
+4. 解除“锁定”并排除杀毒
+   - 若从浏览器下载的 zip，解压后对 CategoryMatching 文件夹右键 → 属性 → 勾选“解除锁定”后确定。
+   - 将 CategoryMatching 文件夹加入杀毒/安全软件的排除项。
+
+5. 以管理员身份运行
+   右键 CategoryMatching.exe → 以管理员身份运行。
+
+6. 使用 OneFile 版（若提供）
+   若发布中提供 CategoryMatching-OneFile.exe，可尝试该单文件版；
+   其从系统临时目录加载，路径通常为英文，可规避部分路径导致的 DLL 加载问题。
+
+========================================
