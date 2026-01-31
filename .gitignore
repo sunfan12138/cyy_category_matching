@@ -16,3 +16,6 @@ output/
 model/
 
 excel/
+
+# 大模型配置（含加密 key，勿提交）
+llm_config.json

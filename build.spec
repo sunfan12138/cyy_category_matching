@@ -17,6 +17,7 @@ a = Analysis(
         'core.matching',
         'core.embedding',
         'core.llm',
+        'core.llm_config',
         'app',
         'app.batch',
         'app.io',

@@ -29,7 +29,7 @@ category_matching/
 ## 开发运行
 
 - 依赖：`uv sync`（含 dev 时 `uv sync --group dev`）
-- 运行：`uv run python main.py`
+- 运行：`uv run main.py`
 
 ## 打包
 
@@ -69,10 +69,21 @@ category_matching/
 
 当相似度检索结果 &lt; 0.9 时，可调用大模型根据品类文本生成一句简短描述，再对该描述做一次关键词规则匹配；若规则命中则按规则结果输出。未配置 API Key 时该步骤自动跳过。
 
-环境变量（可选）：
-- `CATEGORY_MATCHING_LLM_API_KEY`：大模型 API Key（不设则不用 LLM）
-- `CATEGORY_MATCHING_LLM_API_URL`：OpenAI 兼容接口 base URL，默认 `https://api.openai.com/v1`
-- `CATEGORY_MATCHING_LLM_MODEL`：模型名，默认 `gpt-3.5-turbo`
+**key/url/model 可配置**，key 支持加密存储，**不可直接展示**（日志/界面仅脱敏显示）。
+
+- **配置文件**：项目根目录 `llm_config.json`（或环境变量 `CATEGORY_MATCHING_LLM_CONFIG` 指定路径），格式示例：
+  ```json
+  { "api_key_encrypted": "加密后的字符串", "base_url": "https://api.openai.com/v1", "model": "gpt-3.5-turbo" }
+  ```
+  - `api_key_encrypted`：加密后的 API Key（推荐，不落明文）
+  - `base_url`：OpenAI 兼容 base URL
+  - `model`：模型名
+- **加密 key**：运行 `uv run -m core.llm_config <明文key>`，按提示输入口令，将输出的字符串填入 `api_key_encrypted`。运行时需设置环境变量 `CATEGORY_MATCHING_LLM_KEY_PASSPHRASE` 为同一口令以便解密。
+- **环境变量（可选，优先级低于配置文件）**：
+  - `CATEGORY_MATCHING_LLM_API_KEY`：明文 API Key（不推荐，仅便于本地调试）
+  - `CATEGORY_MATCHING_LLM_API_URL`：base URL，默认 `https://api.openai.com/v1`
+  - `CATEGORY_MATCHING_LLM_MODEL`：模型名，默认 `gpt-3.5-turbo`
+  - `CATEGORY_MATCHING_LLM_KEY_PASSPHRASE`：解密 `api_key_encrypted` 的口令
 
 ## 使用与排错
 

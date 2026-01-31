@@ -50,6 +50,15 @@ def get_mcp_config_path() -> Path | None:
     return p if p.exists() else None
 
 
+def get_llm_config_path() -> Path | None:
+    """大模型配置文件路径；未设置或文件不存在时返回 None。"""
+    if os.environ.get("CATEGORY_MATCHING_LLM_CONFIG"):
+        p = Path(os.environ["CATEGORY_MATCHING_LLM_CONFIG"]).resolve()
+        return p if p.exists() else None
+    p = get_base_dir() / "llm_config.json"
+    return p if p.exists() else None
+
+
 def normalize_input_path(raw: str) -> Path:
     """
     规范化用户输入的文件路径：去首尾引号/空白；WSL 下将 Windows 盘符路径转为可访问路径。
