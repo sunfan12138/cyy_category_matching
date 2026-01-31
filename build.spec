@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 # 使用 onedir 模式：输出目录 dist/CategoryMatching/，内含 exe 与全部 DLL 依赖，
 # 发布/分发时需打包整个目录（或上传该目录的 zip），不可只上传单个 exe。
+# excludes 与 strip 用于缩小体积。
 
 block_cipher = None
 
@@ -26,7 +27,17 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'tkinter', '_tkinter',
+        'matplotlib', 'matplotlib.pyplot',
+        'PIL', 'Pillow',
+        'pytest', '_pytest', 'test', 'tests',
+        'IPython', 'jupyter', 'notebook', 'nbformat',
+        'sphinx', 'docutils',
+        'cv2', 'opencv',
+        'pandas',
+        'unittest', 'doctest',
+    ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -56,7 +67,7 @@ coll = COLLECT(
     exe,
     a.binaries,
     a.datas,
-    strip=False,
+    strip=True,
     upx=False,
     upx_exclude=[],
     name='CategoryMatching',
