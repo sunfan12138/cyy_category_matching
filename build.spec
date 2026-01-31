@@ -1,4 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
+# 使用 onedir 模式：输出目录 dist/CategoryMatching/，内含 exe 与全部 DLL 依赖，
+# 发布/分发时需打包整个目录（或上传该目录的 zip），不可只上传单个 exe。
 
 block_cipher = None
 
@@ -10,6 +12,7 @@ a = Analysis(
     hiddenimports=[
         'parser',
         'app',
+        'paths',
         'torch',
         'torch.nn',
         'torch.nn.functional',
@@ -35,7 +38,7 @@ exe = EXE(
     pyz,
     a.scripts,
     [],
-    exclude_binaries=False,
+    exclude_binaries=True,
     name='CategoryMatching',
     debug=False,
     bootloader_ignore_signals=False,
@@ -47,4 +50,14 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='CategoryMatching',
 )
