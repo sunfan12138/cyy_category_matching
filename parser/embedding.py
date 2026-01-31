@@ -1,10 +1,10 @@
-"""基于 sentence-transformers + BGE 的文本向量与相似度。"""
+"""基于 sentence-transformers + BGE 的文本向量与相似度，并组合 Jaro-Winkler 提升准确性。"""
 
 from __future__ import annotations
 
-from parser.models import VerifiedBrand
 from pathlib import Path
 
+from rapidfuzz.distance import JaroWinkler
 from tqdm import tqdm  # type: ignore[import-untyped]
 
 from .models import VerifiedBrand
@@ -76,6 +76,36 @@ def cosine_similarity_0_1(text_a: str, text_b: str) -> float:
     return (cos + 1.0) / 2.0
 
 
+def jaro_winkler_similarity(text_a: str, text_b: str) -> float:
+    """
+    计算两段文本的 Jaro-Winkler 相似度，返回值在 [0, 1]。
+    对拼写变体、字符级相似更敏感，与 BGE 语义相似度互补。
+    """
+    a, b = text_a.strip(), text_b.strip()
+    if not a or not b:
+        return 0.0
+    return float(JaroWinkler.similarity(a, b))
+
+
+# 组合相似度默认权重：BGE 语义为主，Jaro-Winkler 辅助（纠错/字面相似）
+DEFAULT_BGE_WEIGHT = 0.5
+
+
+def combined_similarity(
+    text_a: str,
+    text_b: str,
+    bge_weight: float = DEFAULT_BGE_WEIGHT,
+) -> float:
+    """
+    BGE 余弦相似度与 Jaro-Winkler 的加权组合，返回值在 [0, 1]。
+    bge_weight：BGE 权重（0~1），(1 - bge_weight) 为 Jaro-Winkler 权重。
+    提高对语义相近且字面相近（含拼写变体）的匹配准确性。
+    """
+    bge_sim = cosine_similarity_0_1(text_a, text_b)
+    jw_sim = jaro_winkler_similarity(text_a, text_b)
+    return bge_weight * bge_sim + (1.0 - bge_weight) * jw_sim
+
+
 # 单次编码的最大条数，超过则分批以免 OOM（品牌名较短，可设较大）
 _FILL_EMBEDDING_CHUNK = 16_000
 
@@ -109,10 +139,14 @@ def fill_brand_embeddings(verified_brands: list[VerifiedBrand]) -> None:
 
 
 def similarity_scores_with_cached(
-    query: str, verified_brands: list[VerifiedBrand]
+    query: str,
+    verified_brands: list[VerifiedBrand],
+    use_combined: bool = True,
+    bge_weight: float = DEFAULT_BGE_WEIGHT,
 ) -> list[float]:
     """
     使用缓存的品牌向量计算 query 与每个品牌的相似度 [0, 1]。
+    若 use_combined 为 True（默认），则返回 BGE 与 Jaro-Winkler 的加权组合，提高准确性。
     若某条无 embedding 则返回 0.0。与 verified_brands 顺序一致。
     """
     import numpy as np  # noqa: E402
@@ -121,12 +155,23 @@ def similarity_scores_with_cached(
         return []
     q = encode([query.strip()])
     q = q[0]
-    scores: list[float] = []
+    bge_scores: list[float] = []
     for vb in verified_brands:
         if vb.embedding is None:
-            scores.append(0.0)
+            bge_scores.append(0.0)
             continue
         arr = np.array(vb.embedding, dtype=np.float32)
         cos = float(np.dot(q, arr))
-        scores.append((cos + 1.0) / 2.0)
+        bge_scores.append((cos + 1.0) / 2.0)
+    if not use_combined:
+        return bge_scores
+    # 组合：BGE + Jaro-Winkler
+    scores: list[float] = []
+    for i, vb in enumerate(verified_brands):
+        if vb.brand_name is None:
+            scores.append(0.0)
+            continue
+        bge_s = bge_scores[i] if i < len(bge_scores) else 0.0
+        jw_s = jaro_winkler_similarity(query.strip(), vb.brand_name or "")
+        scores.append(bge_weight * bge_s + (1.0 - bge_weight) * jw_s)
     return scores
