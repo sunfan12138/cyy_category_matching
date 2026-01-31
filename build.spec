@@ -36,7 +36,6 @@ a = Analysis(
         'sphinx', 'docutils',
         'cv2', 'opencv',
         'pandas',
-        'unittest', 'doctest',
     ],
     win_private_assemblies=False,
     cipher=block_cipher,
