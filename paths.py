@@ -43,3 +43,12 @@ def get_output_dir() -> Path:
     if os.environ.get("CATEGORY_MATCHING_OUTPUT_DIR"):
         return Path(os.environ["CATEGORY_MATCHING_OUTPUT_DIR"]).resolve()
     return get_base_dir() / "output"
+
+
+def get_mcp_config_path() -> Path | None:
+    """MCP 客户端配置文件路径；未设置或文件不存在时返回 None。"""
+    if os.environ.get("CATEGORY_MATCHING_MCP_CONFIG"):
+        p = Path(os.environ["CATEGORY_MATCHING_MCP_CONFIG"]).resolve()
+        return p if p.exists() else None
+    p = get_base_dir() / "mcp_client_config.json"
+    return p if p.exists() else None

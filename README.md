@@ -18,6 +18,29 @@
 - 生成 `dist/CategoryMatching/`，内含可执行文件 `CategoryMatching`（无后缀）及依赖
 - 分发时打包整个目录；运行时在可执行文件同目录下放置 `excel`、`model`、`output`，终端执行 `./CategoryMatching`
 
+## MCP 客户端（通过配置集成外部 MCP 工具）
+
+通过配置文件连接外部 MCP 服务器并调用其工具。
+
+1. **配置文件**：在项目根目录放置 `mcp_client_config.json`，或设置环境变量 `CATEGORY_MATCHING_MCP_CONFIG` 指向该文件。
+2. **格式**：JSON，包含 `servers` 数组；每项为 `name`、`transport`（`stdio` 或 `streamable-http`），以及：
+   - **stdio**：`command`、`args`（可选 `env`、`cwd`）
+   - **streamable-http**：`url`
+3. **用法**（异步）：
+   ```python
+   from paths import get_mcp_config_path
+   from mcp_client import load_config, MCPClientManager
+
+   config = load_config(get_mcp_config_path())
+   if config:
+       async with MCPClientManager(config) as manager:
+           tools = await manager.list_tools()  # [(server_name, tool), ...]
+           result = await manager.call_tool("example_stdio", "tool_name", {"arg": "value"})
+   ```
+4. **同步调用**：`from mcp_client import run_async`，用 `run_async(coro)` 包装单次异步调用。
+
+示例配置见仓库内 `mcp_client_config.json`。
+
 ## 使用与排错
 
 解压发布包后，将 `excel`、`model`、`output` 与 exe 放在同一目录下运行。  
