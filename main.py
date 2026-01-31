@@ -1,5 +1,6 @@
 """品类匹配入口：加载规则后循环接受文件路径，批量匹配并输出到 output 目录。"""
 
+import logging
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -10,11 +11,30 @@ from app import (
     run_batch_match,
     write_result_excel,
 )
-from paths import get_excel_dir, get_output_dir
+from paths import get_excel_dir, get_log_dir, get_output_dir
 from core import ensure_model_loaded, fill_brand_embeddings, load_rules, load_verified_brands
 
 
+def _setup_logging() -> None:
+    """将日志写入 logs 目录下的 category_matching.log，便于排查模型调用等。"""
+    log_dir = get_log_dir()
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "category_matching.log"
+    log_path = str(log_file.resolve())
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    # 始终确保本程序的日志文件 handler 存在（避免因 root 已有其他 handler 导致不创建文件）
+    for h in root.handlers:
+        if isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", "") == log_path:
+            return
+    fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
+    handler.setFormatter(logging.Formatter(fmt))
+    root.addHandler(handler)
+
+
 def main() -> None:
+    _setup_logging()
     excel_dir = get_excel_dir()
     output_dir = get_output_dir()
     rules_path = excel_dir / "原子品类关键词.xlsx"

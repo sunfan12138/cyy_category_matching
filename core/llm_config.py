@@ -1,7 +1,7 @@
 """
 大模型配置：key/url/model 可配置；key 支持加密存储，展示时脱敏。
 
-- key 优先级：默认取环境变量 OPEN_AI_KEY（明文，不需解密）；若 llm_config.json 里配置了 key，则用配置的（api_key 明文 或 api_key_encrypted 需解密）。
+- key 优先级：默认取环境变量 OPENAI_API_KEY（明文，不需解密）；若 llm_config.json 里配置了 key，则用配置的（api_key 明文 或 api_key_encrypted 需解密）。
 - 配置文件：llm_config.json 可配 api_key（明文）、api_key_encrypted（加密，解密口令写死在代码中）、base_url、model。
 - base_url/model：仅从配置文件取，未配置则用默认值。
 """
@@ -18,8 +18,8 @@ from pathlib import Path
 _FERNET_SALT = b"category_matching_llm_salt_v1"
 # api_key_encrypted 加解密口令（写死，与加密脚本一致）
 _KEY_PASSPHRASE = "category_matching_llm_key_v1"
-_DEFAULT_URL = "https://api.openai.com/v1"
-_DEFAULT_MODEL = "gpt-3.5-turbo"
+_DEFAULT_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+_DEFAULT_MODEL = "qwen-plus"
 
 
 def mask_key(key: str | None) -> str:
@@ -73,7 +73,7 @@ def decrypt_key(encrypted_b64: str, passphrase: str) -> str | None:
 def load_llm_config() -> tuple[str | None, str, str]:
     """
     加载大模型配置：(api_key, base_url, model)。
-    key 默认取环境变量 OPEN_AI_KEY（明文，不需解密）；若 llm_config.json 里配置了 api_key 或 api_key_encrypted，则用配置的（加密项用写死的口令解密）。
+    key 默认取环境变量 OPENAI_API_KEY（明文，不需解密）；若 llm_config.json 里配置了 api_key 或 api_key_encrypted，则用配置的（加密项用写死的口令解密）。
     base_url/model：仅从配置文件取，未配置则用默认值。
     返回的 api_key 仅用于调用，不可写入日志或界面；展示请用 mask_key(api_key)。
     """
@@ -104,7 +104,7 @@ def load_llm_config() -> tuple[str | None, str, str]:
                     api_key = dec
 
     if api_key is None:
-        api_key = os.environ.get("OPEN_AI_KEY", "").strip() or None
+        api_key = os.environ.get("OPENAI_API_KEY", "").strip() or None
 
     base_url = base_url.rstrip("/") if base_url else _DEFAULT_URL
     model = model or _DEFAULT_MODEL

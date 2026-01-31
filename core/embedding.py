@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from rapidfuzz.distance import JaroWinkler
@@ -24,10 +25,32 @@ def _get_model():
 
         from paths import get_model_dir
 
+        # 隐藏 modelscope / huggingface_hub / transformers 在控制台的打印
+        _log = logging.getLogger("modelscope")
+        _hub = logging.getLogger("huggingface_hub")
+        _trans = logging.getLogger("transformers")
+        _st = logging.getLogger("sentence_transformers")
+        old_levels = (_log.level, _hub.level, _trans.level, _st.level)
+        _log.setLevel(logging.WARNING)
+        _hub.setLevel(logging.WARNING)
+        _trans.setLevel(logging.WARNING)
+        _st.setLevel(logging.WARNING)
+
         model_dir = get_model_dir()
         model_dir.mkdir(parents=True, exist_ok=True)
-        local_dir = snapshot_download(BGE_MODEL_ID, cache_dir=str(model_dir))
+
+        # 下载：不显示进度条（progress_callbacks=[] 关闭 modelscope 默认进度）
+        local_dir = snapshot_download(
+            BGE_MODEL_ID,
+            cache_dir=str(model_dir),
+            progress_callbacks=[],
+        )
+
+        # 加载
         _model = SentenceTransformer(local_dir)
+
+        for logger, level in zip((_log, _hub, _trans, _st), old_levels):
+            logger.setLevel(level)
     return _model
 
 

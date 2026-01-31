@@ -71,7 +71,7 @@ category_matching/
 
 **key/url/model 可配置**，key 支持加密存储，**不可直接展示**（日志/界面仅脱敏显示）。
 
-- **key 优先级**：默认取环境变量 `OPEN_AI_KEY`（明文，不需解密）；若 `llm_config.json` 里配置了 key，则用配置的（`api_key` 明文 或 `api_key_encrypted` 需解密）。
+- **key 优先级**：默认取环境变量 `OPENAI_API_KEY`（明文，不需解密）；若 `llm_config.json` 里配置了 key，则用配置的（`api_key` 明文 或 `api_key_encrypted` 需解密）。
 - **配置文件**：项目根目录 `llm_config.json`（或环境变量 `CATEGORY_MATCHING_LLM_CONFIG` 指定路径），格式示例：
   ```json
   { "api_key": "可选明文", "api_key_encrypted": "可选加密字符串", "base_url": "https://api.openai.com/v1", "model": "gpt-3.5-turbo" }
@@ -81,7 +81,7 @@ category_matching/
   - `base_url`、`model`：OpenAI 兼容 base URL 与模型名
 - **加密 key**：运行 `uv run -m core.llm_config <明文key>`，按提示输入口令，将输出的字符串填入 `api_key_encrypted`。运行时需设置环境变量 `CATEGORY_MATCHING_LLM_KEY_PASSPHRASE` 为同一口令以便解密。
 - **环境变量**：
-  - `OPEN_AI_KEY`：默认 API Key（明文，不需解密；被配置文件中的 key 覆盖时不用）
+  - `OPENAI_API_KEY`：默认 API Key（明文，不需解密；被配置文件中的 key 覆盖时不用）
   - `CATEGORY_MATCHING_LLM_KEY_PASSPHRASE`：解密 `api_key_encrypted` 的口令
   - base_url、model 仅从配置文件 `llm_config.json` 取，未配置则用默认值
 

@@ -5,8 +5,8 @@ from pathlib import Path
 import openpyxl  # type: ignore[import-untyped]
 from openpyxl.styles import Font  # type: ignore[import-untyped]
 
-# 8 列：(输入品类, 一级, 编码, 原子品类, 匹配方式, 原品牌编码, 原品牌名, 相似度)
-ResultRow = tuple[str, str, str, str, str, str, str, str]
+# 9 列：(输入品类, 一级, 编码, 原子品类, 匹配方式, 原品牌编码, 原品牌名, 相似度, 大模型描述)
+ResultRow = tuple[str, str, str, str, str, str, str, str, str]
 
 HEADERS = (
     "输入品类",
@@ -17,6 +17,7 @@ HEADERS = (
     "原品牌编码",
     "原品牌名",
     "相似度",
+    "大模型描述",
 )
 
 

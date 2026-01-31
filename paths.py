@@ -2,7 +2,7 @@
 路径与输入规范化：基准目录、model/excel/output、MCP 配置、用户路径解析。
 
 - 未打包：以 main.py 所在目录为基准；打包后以 exe 所在目录为基准。
-- 环境变量：CATEGORY_MATCHING_BASE_DIR / MODEL_DIR / EXCEL_DIR / OUTPUT_DIR / MCP_CONFIG
+- 环境变量：CATEGORY_MATCHING_BASE_DIR / MODEL_DIR / EXCEL_DIR / OUTPUT_DIR / LOG_DIR / MCP_CONFIG
 """
 
 import os
@@ -39,6 +39,13 @@ def get_output_dir() -> Path:
     if os.environ.get("CATEGORY_MATCHING_OUTPUT_DIR"):
         return Path(os.environ["CATEGORY_MATCHING_OUTPUT_DIR"]).resolve()
     return get_base_dir() / "output"
+
+
+def get_log_dir() -> Path:
+    """日志文件所在目录（用于记录模型调用等）。"""
+    if os.environ.get("CATEGORY_MATCHING_LOG_DIR"):
+        return Path(os.environ["CATEGORY_MATCHING_LOG_DIR"]).resolve()
+    return get_base_dir() / "logs"
 
 
 def get_mcp_config_path() -> Path | None:

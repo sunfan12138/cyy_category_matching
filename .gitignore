@@ -9,8 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
-# Output
+# Output & logs
 output/
+logs/
 
 # BGE 模型缓存（sentence-transformers 下载到此目录）
 model/
