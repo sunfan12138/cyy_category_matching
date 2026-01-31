@@ -22,18 +22,16 @@ jobs:
         with:
           version: "latest"
 
-      - name: Build executable (onedir)
+      - name: Build executable (OneFile)
         run: .\build.bat
 
-      - name: Build OneFile executable (backup)
-        run: uv run pyinstaller --clean build-onefile.spec
-
-      - name: Copy OneFile exe and 使用说明、运行诊断 into dist
+      - name: Pack release (exe + 使用说明、运行诊断)
         run: |
-          Copy-Item dist\CategoryMatching-OneFile.exe dist\CategoryMatching\
+          New-Item -ItemType Directory -Force -Path dist\CategoryMatching
+          Copy-Item dist\CategoryMatching.exe dist\CategoryMatching\
           Copy-Item 使用说明.txt dist\CategoryMatching\
           Copy-Item 运行诊断.bat dist\CategoryMatching\
-      - name: Zip dist folder (exe + DLLs)
+      - name: Zip release
         run: Compress-Archive -Path dist\CategoryMatching -DestinationPath CategoryMatching-Windows.zip
 
       - name: Upload artifact

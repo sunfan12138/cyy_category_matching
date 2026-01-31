@@ -2,6 +2,30 @@
 
 从 Excel 读取匹配规则与已校验品牌数据，对输入的品类文本进行规则匹配或 BGE 相似度匹配，结果输出到 Excel。当相似度匹配结果 &lt; 0.9 时，可调用大模型生成品类描述并再次做关键词规则匹配（需配置 API）。
 
+## 项目结构
+
+```
+category_matching/
+├── main.py              # 入口：加载规则 → 循环输入文件 → 批量匹配 → 输出 Excel
+├── paths.py             # 路径与输入规范化（基准目录、model/excel/output、normalize_input_path）
+├── core/                # 匹配核心
+│   ├── models.py        # 数据模型（CategoryRule, VerifiedBrand）
+│   ├── loaders.py       # Excel 加载（load_rules, load_verified_brands）
+│   ├── matching.py     # 规则匹配 + 相似度回退（match_store, match_by_similarity）
+│   ├── embedding.py    # BGE 向量与 Jaro-Winkler 组合相似度
+│   └── llm.py          # 大模型品类描述（相似度 &lt; 0.9 时二次规则匹配）
+├── app/                 # 应用层
+│   ├── batch.py        # 批量匹配流程（run_batch_match）
+│   └── io.py           # 文件读写（read_categories_from_file, write_result_excel）
+├── mcp_client/         # MCP 客户端（可选，通过配置连接外部 MCP 工具）
+│   ├── config.py       # 配置加载
+│   └── manager.py      # 连接与 list_tools / call_tool
+├── mcp_client_config.json
+├── build-onefile.spec   # Windows 打包（OneFile）
+├── build.spec           # macOS 打包（onedir）
+└── excel/ model/ output/  # 数据与输出目录
+```
+
 ## 开发运行
 
 - 依赖：`uv sync`（含 dev 时 `uv sync --group dev`）
@@ -9,9 +33,9 @@
 
 ## 打包
 
-**Windows**
-- 本地：`build.bat`（生成 `dist\CategoryMatching\`，内含 exe 与 `_internal`）
-- OneFile 备用：`uv run pyinstaller --clean build-onefile.spec`（生成 `dist\CategoryMatching-OneFile.exe`）
+**Windows（仅 OneFile）**
+- 本地：`build.bat`（生成单文件 `dist\CategoryMatching.exe`）
+- 发布 zip 内含：CategoryMatching.exe、使用说明.txt、运行诊断.bat
 
 **macOS**
 - 在项目根目录执行：`./build.sh`（需先 `chmod +x build.sh`）

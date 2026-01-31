@@ -1,9 +1,9 @@
-"""应用层：路径/文件 IO、批量匹配、结果输出。"""
+"""应用层：批量匹配、文件读写、路径规范化。"""
+
+from paths import normalize_input_path
 
 from .batch import run_batch_match
-from .file_io import read_categories_from_file
-from .output import write_result_excel
-from .path_utils import normalize_input_path
+from .io import read_categories_from_file, write_result_excel
 
 __all__ = [
     "normalize_input_path",

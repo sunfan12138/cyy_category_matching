@@ -26,11 +26,11 @@ if %errorlevel% neq 0 (
 echo 依赖同步成功！
 echo.
 
-echo [3/3] 开始打包 (onedir: exe + 全部 DLL)...
-echo 打包配置文件: build.spec
-echo 输出目录: dist\CategoryMatching\
+echo [3/3] 开始打包 (OneFile: 单 exe)...
+echo 打包配置文件: build-onefile.spec
+echo 输出: dist\CategoryMatching.exe
 echo.
-uv run pyinstaller --clean build.spec
+uv run pyinstaller --clean build-onefile.spec
 if %errorlevel% neq 0 (
     echo 打包失败！请检查错误信息。
     pause
@@ -40,12 +40,10 @@ echo.
 
 echo ========================================
 echo 打包成功！
-echo 输出目录: dist\CategoryMatching\
-echo   - CategoryMatching.exe
-echo   - _internal\ (及全部 DLL 等依赖)
+echo 输出: dist\CategoryMatching.exe （单文件）
 echo.
 echo 使用说明:
-echo 1. 分发/发布请使用整个 dist\CategoryMatching 目录（或其 zip）
+echo 1. 分发/发布可单独分发 exe 或与使用说明等一起打 zip
 echo 2. 在 exe 同目录下放置 excel、model、output 文件夹
 echo 3. 运行 CategoryMatching.exe 开始使用
 echo ========================================

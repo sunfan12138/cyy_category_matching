@@ -2,20 +2,19 @@
 
 from tqdm import tqdm  # type: ignore[import-untyped]
 
-from parser import (
+from core import (
     CategoryRule,
     VerifiedBrand,
     match_by_similarity,
     match_store,
 )
-from parser.llm import get_category_description
+from core.llm import get_category_description
+
+from .io import ResultRow
 
 SIMILARITY_THRESHOLD = 0
 # 相似度低于此值时，用大模型生成品类描述并再次做关键词规则匹配
 LLM_FALLBACK_SIMILARITY_THRESHOLD = 0.9
-
-# 输入品类, 一级, 编码, 原子品类, 匹配方式, 原品牌编码, 原品牌名, 相似度（仅相似度匹配时填）
-ResultRow = tuple[str, str, str, str, str, str, str, str]
 
 
 def match_store_categories(

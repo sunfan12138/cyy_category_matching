@@ -1,6 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# OneFile 备用构建：生成单个 exe，运行时解压到 %TEMP%。
-# 若 onedir 版报 "Failed to load Python DLL"，可尝试本版本（从临时目录加载，路径通常为纯英文）。
+# Windows 打包仅使用 OneFile：生成单个 exe，运行时解压到 %TEMP%。
 
 block_cipher = None
 
@@ -10,9 +9,18 @@ a = Analysis(
     binaries=[],
     datas=[],
     hiddenimports=[
-        'parser',
+        'core',
+        'core.models',
+        'core.loaders',
+        'core.matching',
+        'core.embedding',
+        'core.llm',
         'app',
+        'app.batch',
+        'app.io',
         'paths',
+        'rapidfuzz',
+        'openai',
         'torch',
         'torch.nn',
         'torch.nn.functional',
@@ -48,7 +56,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='CategoryMatching-OneFile',
+    name='CategoryMatching',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

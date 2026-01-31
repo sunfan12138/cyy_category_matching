@@ -11,7 +11,7 @@ from app import (
     write_result_excel,
 )
 from paths import get_excel_dir, get_output_dir
-from parser import ensure_model_loaded, fill_brand_embeddings, load_rules, load_verified_brands
+from core import ensure_model_loaded, fill_brand_embeddings, load_rules, load_verified_brands
 
 
 def main() -> None:
