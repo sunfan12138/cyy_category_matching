@@ -1,6 +1,6 @@
 # 品类匹配工具
 
-从 Excel 读取匹配规则与已校验品牌数据，对输入的品类文本进行规则匹配或 BGE 相似度匹配，结果输出到 Excel。
+从 Excel 读取匹配规则与已校验品牌数据，对输入的品类文本进行规则匹配或 BGE 相似度匹配，结果输出到 Excel。当相似度匹配结果 &lt; 0.9 时，可调用大模型生成品类描述并再次做关键词规则匹配（需配置 API）。
 
 ## 开发运行
 
@@ -40,6 +40,15 @@
 4. **同步调用**：`from mcp_client import run_async`，用 `run_async(coro)` 包装单次异步调用。
 
 示例配置见仓库内 `mcp_client_config.json`。
+
+## 大模型二次规则匹配（相似度 &lt; 0.9）
+
+当相似度检索结果 &lt; 0.9 时，可调用大模型根据品类文本生成一句简短描述，再对该描述做一次关键词规则匹配；若规则命中则按规则结果输出。未配置 API Key 时该步骤自动跳过。
+
+环境变量（可选）：
+- `CATEGORY_MATCHING_LLM_API_KEY`：大模型 API Key（不设则不用 LLM）
+- `CATEGORY_MATCHING_LLM_API_URL`：OpenAI 兼容接口 base URL，默认 `https://api.openai.com/v1`
+- `CATEGORY_MATCHING_LLM_MODEL`：模型名，默认 `gpt-3.5-turbo`
 
 ## 使用与排错
 

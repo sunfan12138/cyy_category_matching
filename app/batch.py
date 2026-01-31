@@ -8,8 +8,11 @@ from parser import (
     match_by_similarity,
     match_store,
 )
+from parser.llm import get_category_description
 
 SIMILARITY_THRESHOLD = 0
+# 相似度低于此值时，用大模型生成品类描述并再次做关键词规则匹配
+LLM_FALLBACK_SIMILARITY_THRESHOLD = 0.9
 
 # 输入品类, 一级, 编码, 原子品类, 匹配方式, 原品牌编码, 原品牌名, 相似度（仅相似度匹配时填）
 ResultRow = tuple[str, str, str, str, str, str, str, str]
@@ -20,7 +23,12 @@ def match_store_categories(
     rules: list[CategoryRule],
     verified_brands: list[VerifiedBrand],
 ) -> tuple[list[CategoryRule], bool, VerifiedBrand | None, float]:
-    """单条匹配：规则优先，无结果时走相似度。返回 (匹配规则列表, 是否相似度匹配, 命中品牌, 相似度)。"""
+    """
+    单条匹配：规则优先，无结果时走相似度。
+    若相似度匹配结果 < LLM_FALLBACK_SIMILARITY_THRESHOLD（0.9），则调用大模型生成品类描述，
+    再对描述做一次关键词规则匹配；若规则命中则按规则结果返回。
+    返回 (匹配规则列表, 是否相似度匹配, 命中品牌, 相似度)。
+    """
     matched = match_store(store_text.strip(), rules)
     if matched:
         return matched, False, None, 0.0
@@ -29,6 +37,13 @@ def match_store_categories(
     matched, ref_brand, score = match_by_similarity(
         store_text, verified_brands, threshold=SIMILARITY_THRESHOLD
     )
+    # 相似度 < 0.9 时，用大模型生成描述再规则匹配
+    if matched and ref_brand is not None and score < LLM_FALLBACK_SIMILARITY_THRESHOLD:
+        desc = get_category_description(store_text)
+        if desc:
+            rule_matched = match_store(desc.strip(), rules)
+            if rule_matched:
+                return rule_matched, False, None, 0.0
     return matched, bool(matched), ref_brand, score if ref_brand is not None else 0.0
 
 
