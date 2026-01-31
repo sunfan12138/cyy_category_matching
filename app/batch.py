@@ -1,5 +1,6 @@
 """批量品类匹配：单条匹配 + 批量运行。"""
 
+import logging
 from tqdm import tqdm  # type: ignore[import-untyped]
 
 from core import (
@@ -8,9 +9,11 @@ from core import (
     match_by_similarity,
     match_store,
 )
-from core.llm import get_category_description
+from core.llm import get_category_description_with_search
 
 from .io import ResultRow
+
+logger = logging.getLogger(__name__)
 
 SIMILARITY_THRESHOLD = 0
 # 相似度低于此值时，用大模型生成品类描述并再次做关键词规则匹配
@@ -24,26 +27,34 @@ def match_store_categories(
 ) -> tuple[list[CategoryRule], bool, VerifiedBrand | None, float, str | None]:
     """
     单条匹配：规则优先，无结果时走相似度。
-    若相似度匹配结果 < LLM_FALLBACK_SIMILARITY_THRESHOLD（0.9），则调用大模型生成品类描述，
-    再对描述做一次关键词规则匹配；若规则命中则按规则结果返回（记为「搜索后匹配」）。
+    若相似度匹配结果 < LLM_FALLBACK_SIMILARITY_THRESHOLD（0.9），则首次对话即调用带 MCP 工具的大模型
+    （可调用搜索等工具），根据描述做关键词规则匹配；若规则命中则按规则结果返回（记为「搜索后匹配」）。
     返回 (匹配规则列表, 是否相似度匹配, 命中品牌, 相似度, 大模型描述或 None)。
     """
-    matched = match_store(store_text.strip(), rules)
+    store_text = store_text.strip()
+    matched = match_store(store_text, rules)
     if matched:
         return matched, False, None, 0.0, None
     if not verified_brands:
+        logger.debug("未进入 LLM/MCP：无已校验品牌")
         return [], False, None, 0.0, None
     matched, ref_brand, score = match_by_similarity(
         store_text, verified_brands, threshold=SIMILARITY_THRESHOLD
     )
-    # 相似度 < 0.9 时，用大模型生成描述再规则匹配（二次关键词匹配）
-    if matched and ref_brand is not None and score < LLM_FALLBACK_SIMILARITY_THRESHOLD:
-        desc = get_category_description(store_text, rules=rules)
-        if desc:
-            rule_matched = match_store(desc.strip(), rules)
-            if rule_matched:
-                return rule_matched, False, None, 0.0, desc
-    return matched, bool(matched), ref_brand, score if ref_brand is not None else 0.0, None
+    if not matched or ref_brand is None:
+        logger.info("未进入 LLM/MCP [%s]：无相似度匹配（与已校验品牌均不相似）", store_text[:40])
+        return [], False, None, 0.0, None
+    if score >= LLM_FALLBACK_SIMILARITY_THRESHOLD:
+        logger.info("未进入 LLM/MCP [%s]：相似度 %.2f >= 0.9，直接采用相似度结果", store_text[:40], score)
+        return matched, True, ref_brand, score, None
+    # 相似度 < 0.9 时，调用大模型（带 MCP 工具），再对描述做规则匹配
+    logger.info("开始调用大模型 [%s]：相似度 < 0.9", store_text[:40])
+    desc = get_category_description_with_search(store_text, rules=rules)
+    if desc:
+        rule_matched = match_store(desc.strip(), rules)
+        if rule_matched:
+            return rule_matched, False, None, 0.0, desc
+    return matched, True, ref_brand, score, None
 
 
 def run_batch_match(

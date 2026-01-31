@@ -123,11 +123,11 @@ def get_config_display() -> dict[str, str]:
 
 
 def _main_encrypt() -> None:
-    """命令行：将明文 key 加密后输出，用于写入 llm_config.json。用法：uv run -m core.llm_config <明文key>（口令写死在代码中）"""
+    """命令行：将明文 key 加密后输出，用于写入 llm_config.json。用法：uv run -m core.llm.llm_config <明文key>（口令写死在代码中）"""
     import sys
 
     if len(sys.argv) < 2:
-        print("用法: uv run -m core.llm_config <明文API_Key>")
+        print("用法: uv run -m core.llm.llm_config <明文API_Key>")
         print("输出加密后的字符串，填入 llm_config.json 的 api_key_encrypted。")
         sys.exit(1)
     plain = sys.argv[1].strip()

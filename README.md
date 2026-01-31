@@ -13,7 +13,9 @@ category_matching/
 │   ├── loaders.py       # Excel 加载（load_rules, load_verified_brands）
 │   ├── matching.py     # 规则匹配 + 相似度回退（match_store, match_by_similarity）
 │   ├── embedding.py    # BGE 向量与 Jaro-Winkler 组合相似度
-│   └── llm.py          # 大模型品类描述（相似度 &lt; 0.9 时二次规则匹配）
+│   └── llm/            # 大模型品类描述（相似度 &lt; 0.9 时调用，带 MCP 工具）
+│       ├── prompt.py   # 提示词与参考关键词
+│       └── client.py    # 大模型客户端（支持 MCP 工具），日志记录每轮对话与工具
 ├── app/                 # 应用层
 │   ├── batch.py        # 批量匹配流程（run_batch_match）
 │   └── io.py           # 文件读写（read_categories_from_file, write_result_excel）
@@ -77,12 +79,11 @@ category_matching/
   { "api_key": "可选明文", "api_key_encrypted": "可选加密字符串", "base_url": "https://api.openai.com/v1", "model": "gpt-3.5-turbo" }
   ```
   - `api_key`：明文 API Key（配置后覆盖环境变量，不需解密）
-  - `api_key_encrypted`：加密后的 API Key（需环境变量 `CATEGORY_MATCHING_LLM_KEY_PASSPHRASE` 解密）
+  - `api_key_encrypted`：加密后的 API Key（解密口令写死在代码中）
   - `base_url`、`model`：OpenAI 兼容 base URL 与模型名
-- **加密 key**：运行 `uv run -m core.llm_config <明文key>`，按提示输入口令，将输出的字符串填入 `api_key_encrypted`。运行时需设置环境变量 `CATEGORY_MATCHING_LLM_KEY_PASSPHRASE` 为同一口令以便解密。
+- **加密 key**：运行 `uv run -m core.llm.llm_config <明文key>`，将输出的字符串填入 `api_key_encrypted`（解密口令已写死在代码中）。
 - **环境变量**：
   - `OPENAI_API_KEY`：默认 API Key（明文，不需解密；被配置文件中的 key 覆盖时不用）
-  - `CATEGORY_MATCHING_LLM_KEY_PASSPHRASE`：解密 `api_key_encrypted` 的口令
   - base_url、model 仅从配置文件 `llm_config.json` 取，未配置则用默认值
 
 ## 使用与排错
