@@ -8,26 +8,30 @@
 category_matching/
 ├── main.py              # 入口：加载规则 → 循环输入文件 → 批量匹配 → 输出 Excel
 ├── paths.py             # 路径与输入规范化（基准目录、model/excel/output、normalize_input_path）
-├── core/                # 匹配核心
+├── core/                # 核心领域：数据模型、规则/相似度匹配、数据加载、向量嵌入
 │   ├── models.py        # 数据模型（CategoryRule, VerifiedBrand）
 │   ├── loaders.py       # Excel 加载（load_rules, load_verified_brands）
-│   ├── matching.py     # 规则匹配 + 相似度回退（match_store, match_by_similarity）
-│   ├── embedding.py    # BGE 向量与 Jaro-Winkler 组合相似度
-│   └── llm/            # 大模型品类描述（相似度 &lt; 0.9 时调用，带 MCP 工具）
-│       ├── prompt.py   # 提示词与参考关键词
-│       └── client.py    # 大模型客户端（支持 MCP 工具），日志记录每轮对话与工具
-├── app/                 # 应用层
-│   ├── batch.py        # 批量匹配流程（run_batch_match）
-│   └── io.py           # 文件读写（read_categories_from_file, write_result_excel）
-├── mcp_client/         # MCP 客户端（可选，通过配置连接外部 MCP 工具）
-│   ├── config.py       # 配置加载
-│   └── manager.py      # 连接与 list_tools / call_tool
-├── config/             # 配置文件目录（未打包=项目根/config，打包后=当前工作目录/config）
-│   ├── llm_config.json       # 大模型配置（可选，含 api_key/base_url/model）
+│   ├── matching.py      # 规则匹配 + 相似度回退（match_store, match_by_similarity）
+│   ├── embedding.py     # BGE 向量与组合相似度
+│   ├── conf/            # 配置（路径、LLM、MCP 配置与加载）
+│   └── utils/           # 核心工具（Excel 读写、相似度计算）
+├── llm/                 # LLM 独立封装（相似度 &lt; 0.9 时调用，带 MCP 工具）
+│   ├── prompt.py        # 提示词与参考关键词
+│   ├── client.py        # 大模型客户端（支持 MCP 工具）
+│   └── llm_config.py    # 配置 re-export + 加密 CLI（uv run -m llm.llm_config）
+├── app/                 # 应用层：流程控制与文件 I/O
+│   ├── batch_match.py   # 批量匹配流程（run_batch_match）
+│   └── io.py            # 文件读写（read_categories_from_file, write_result_excel）
+├── mcp_client/          # MCP 客户端（可选，通过配置连接外部 MCP 工具）
+│   ├── config.py        # 配置加载
+│   └── manager.py       # 连接与 list_tools / call_tool
+├── config/              # 配置文件目录（未打包=项目根/config，打包后=当前工作目录/config）
+│   ├── llm_config.json  # 大模型配置（可选，含 api_key/base_url/model）
 │   └── mcp_client_config.json # MCP 服务器配置
+├── tests/               # 单元测试（tests/unit/）
 ├── build-onefile.spec   # Windows 打包（OneFile）
-├── build.spec           # macOS 打包（onedir）
-└── excel/ model/ output/  # 数据与输出目录
+├── build.spec            # macOS 打包（onedir）
+└── excel/ model/ output/ # 数据与输出目录
 ```
 
 ## 开发运行
@@ -83,7 +87,7 @@ category_matching/
   - `api_key`：明文 API Key（配置后覆盖环境变量，不需解密）
   - `api_key_encrypted`：加密后的 API Key（解密口令写死在代码中）
   - `base_url`、`model`：OpenAI 兼容 base URL 与模型名
-- **加密 key**：运行 `uv run -m core.llm.llm_config <明文key>`，将输出的字符串填入 `api_key_encrypted`（解密口令已写死在代码中）。
+- **加密 key**：运行 `uv run -m llm.llm_config <明文key>`，将输出的字符串填入 `api_key_encrypted`（解密口令已写死在代码中）。
 - **环境变量**：
   - `OPENAI_API_KEY`：默认 API Key（明文，不需解密；被配置文件中的 key 覆盖时不用）
   - base_url、model 仅从配置文件 `llm_config.json` 取，未配置则用默认值

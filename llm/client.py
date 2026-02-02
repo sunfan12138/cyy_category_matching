@@ -1,6 +1,6 @@
 """
 大模型客户端：根据品类文本生成品类描述，支持 MCP 工具（搜索等）。
-配置统一从 core.config 获取（get_llm_config、get_mcp_config）。
+配置从 core.conf 获取（get_llm_config、get_mcp_config）。
 """
 
 from __future__ import annotations

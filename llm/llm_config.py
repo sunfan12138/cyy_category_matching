@@ -1,5 +1,6 @@
 """
 大模型配置：从 core.conf 统一 re-export，保持原有调用方式兼容。
+命令行加密：uv run -m llm.llm_config <明文key>
 """
 
 from __future__ import annotations
@@ -24,9 +25,9 @@ __all__ = [
 
 
 def _main_encrypt() -> None:
-    """命令行：uv run -m core.llm.llm_config <明文key>"""
+    """命令行：uv run -m llm.llm_config <明文key>"""
     if len(sys.argv) < 2:
-        print("用法: uv run -m core.llm.llm_config <明文API_Key>")
+        print("用法: uv run -m llm.llm_config <明文API_Key>")
         print("输出加密后的字符串，填入 llm_config.json 的 api_key_encrypted。")
         sys.exit(1)
     enc = encrypt_key(sys.argv[1].strip())

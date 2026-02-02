@@ -10,7 +10,7 @@ from core import (
     match_by_similarity,
     match_store,
 )
-from core.llm import get_category_description_with_search, get_category_description_with_search_async
+from llm import get_category_description_with_search, get_category_description_with_search_async
 
 from .io import ResultRow
 

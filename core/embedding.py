@@ -5,10 +5,14 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from rapidfuzz.distance import JaroWinkler
 from tqdm import tqdm  # type: ignore[import-untyped]
 
 from .models import VerifiedBrand
+from .utils.similarity import (
+    DEFAULT_BGE_WEIGHT,
+    jaro_winkler_similarity,
+    weighted_combined,
+)
 
 # 中文场景推荐，体积与速度平衡；ModelScope / HuggingFace 均可用此 ID
 BGE_MODEL_ID = "BAAI/bge-small-zh-v1.5"
@@ -99,21 +103,7 @@ def cosine_similarity_0_1(text_a: str, text_b: str) -> float:
     return (cos + 1.0) / 2.0
 
 
-def jaro_winkler_similarity(text_a: str, text_b: str) -> float:
-    """
-    计算两段文本的 Jaro-Winkler 相似度，返回值在 [0, 1]。
-    对拼写变体、字符级相似更敏感，与 BGE 语义相似度互补。
-    """
-    a, b = text_a.strip(), text_b.strip()
-    if not a or not b:
-        return 0.0
-    return float(JaroWinkler.similarity(a, b))
-
-
-# 组合相似度默认权重：BGE 语义为主，Jaro-Winkler 辅助（纠错/字面相似）
-DEFAULT_BGE_WEIGHT = 0.5
-
-
+# 从 utils.similarity 导出，供 matching 等模块使用
 def combined_similarity(
     text_a: str,
     text_b: str,
@@ -126,7 +116,7 @@ def combined_similarity(
     """
     bge_sim = cosine_similarity_0_1(text_a, text_b)
     jw_sim = jaro_winkler_similarity(text_a, text_b)
-    return bge_weight * bge_sim + (1.0 - bge_weight) * jw_sim
+    return weighted_combined(bge_sim, jw_sim, bge_weight)
 
 
 # 单次编码的最大条数，超过则分批以免 OOM（品牌名较短，可设较大）
@@ -196,5 +186,5 @@ def similarity_scores_with_cached(
             continue
         bge_s = bge_scores[i] if i < len(bge_scores) else 0.0
         jw_s = jaro_winkler_similarity(query.strip(), vb.brand_name or "")
-        scores.append(bge_weight * bge_s + (1.0 - bge_weight) * jw_s)
+        scores.append(weighted_combined(bge_s, jw_s, bge_weight))
     return scores

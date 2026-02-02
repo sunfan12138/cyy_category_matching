@@ -2,7 +2,7 @@
 
 from paths import normalize_input_path
 
-from .batch import run_batch_match
+from .batch_match import run_batch_match
 from .io import read_categories_from_file, write_result_excel
 
 __all__ = [
