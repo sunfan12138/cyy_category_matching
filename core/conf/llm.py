@@ -6,7 +6,6 @@ import base64
 import json
 import logging
 import os
-from pathlib import Path
 
 from . import paths as _paths
 

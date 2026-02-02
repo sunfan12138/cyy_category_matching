@@ -1,9 +1,28 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "category-matching"
+name = "cyy-category-matching"
 version = "0.1.0"
-description = "Add your description here"
+description = "LLM + Excel 品类匹配批处理工具：基于规则与向量匹配，支持批量品类文件处理与结果导出。"
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.11"
+keywords = ["llm", "excel", "category-matching", "batch"]
+authors = [
+    { name = "cyy" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business",
+]
+
 dependencies = [
     "mcp[cli]>=1.0.0",
     "modelscope>=1.11.0",
@@ -15,6 +34,15 @@ dependencies = [
     "tqdm>=4.66.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pyinstaller>=6.18.0",
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+category-matching = "main:main"
+
 [dependency-groups]
 dev = [
     "pyinstaller>=6.18.0",
@@ -24,11 +52,18 @@ dev = [
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["."]
-
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
+
+[tool.setuptools]
+py-modules = ["main", "paths"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "core*", "llm*", "mcp_client*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
