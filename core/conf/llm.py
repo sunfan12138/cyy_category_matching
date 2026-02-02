@@ -7,6 +7,10 @@ import json
 import logging
 import os
 
+from pydantic import ValidationError
+
+from models.schemas import LlmConfigSchema
+
 from . import paths as _paths
 
 logger = logging.getLogger(__name__)
@@ -78,24 +82,22 @@ def load_llm_config() -> tuple[str | None, str, str]:
         try:
             raw = config_path.read_text(encoding="utf-8")
             data = json.loads(raw)
-        except Exception as e:
-            logger.warning("读取 llm_config.json 失败: %s", e)
-            data = {}
-        base_url = (data.get("base_url") or _DEFAULT_URL).strip().rstrip("/")
-        model = (data.get("model") or _DEFAULT_MODEL).strip()
-        plain_in_config = (data.get("api_key") or "").strip()
-        if plain_in_config:
-            api_key = plain_in_config
+            cfg = LlmConfigSchema.model_validate(data)
+        except (ValidationError, json.JSONDecodeError) as e:
+            logger.warning("读取或解析 llm_config.json 失败: %s", e)
+            cfg = LlmConfigSchema()
+        base_url = cfg.base_url.rstrip("/") if cfg.base_url else _DEFAULT_URL
+        model = cfg.model or _DEFAULT_MODEL
+        if cfg.api_key:
+            api_key = cfg.api_key
             logger.info("大模型配置已加载（api_key 明文），base_url=%s, model=%s", base_url, model)
-        else:
-            enc = (data.get("api_key_encrypted") or "").strip()
-            if enc:
-                dec = decrypt_key(enc)
-                if dec:
-                    api_key = dec
-                    logger.info("大模型配置已加载（api_key_encrypted 解密成功），base_url=%s, model=%s", base_url, model)
-                else:
-                    logger.warning("api_key_encrypted 解密失败，请确认是用本项目 uv run -m llm.llm_config <明文key> 生成的密文")
+        elif cfg.api_key_encrypted:
+            dec = decrypt_key(cfg.api_key_encrypted)
+            if dec:
+                api_key = dec
+                logger.info("大模型配置已加载（api_key_encrypted 解密成功），base_url=%s, model=%s", base_url, model)
+            else:
+                logger.warning("api_key_encrypted 解密失败，请确认是用本项目 uv run -m llm.llm_config <明文key> 生成的密文")
 
     if api_key is None:
         api_key = os.environ.get("OPENAI_API_KEY", "").strip() or None

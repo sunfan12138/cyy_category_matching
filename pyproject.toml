@@ -24,6 +24,7 @@ classifiers = [
 ]
 
 dependencies = [
+    "pydantic>=2.0.0",
     "mcp[cli]>=1.0.0",
     "modelscope>=1.11.0",
     "openai>=1.0.0",
@@ -62,7 +63,7 @@ py-modules = ["main", "paths"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["app*", "core*", "llm*", "mcp_client*"]
+include = ["app*", "core*", "llm*", "mcp_client*", "models*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -30,41 +29,18 @@ from core import (
 )
 from core.conf import load_app_config
 from core.models import CategoryRule, VerifiedBrand
+from models.schemas import RunConfigSchema
 
 # 7 列结果行类型（与 app.io.ResultRow 一致）
 ResultRow = tuple[str, str, str, str, str, str, str]
 
-# 默认规则与已校验品牌文件名（可通过 RunConfig 覆盖）
+# 默认规则与已校验品牌文件名（可通过 RunConfigSchema 覆盖）
 DEFAULT_RULES_FILENAME = "原子品类关键词.xlsx"
 DEFAULT_VERIFIED_FILENAME = "校验过的品牌对应原子品类.xlsx"
 DEFAULT_INPUT_STEM_IGNORE = "新建文本文档"
 
-
-@dataclass
-class RunConfig:
-    """
-    运行时配置：路径与可选参数，便于注入与单测。
-    不包含大模型/ MCP 等业务配置（由 core.conf 管理）。
-    """
-
-    excel_dir: Path
-    """规则与已校验品牌 Excel 所在目录。"""
-    output_dir: Path
-    """匹配结果输出目录。"""
-    log_dir: Path
-    """日志文件目录。"""
-    rules_filename: str = DEFAULT_RULES_FILENAME
-    """规则 Excel 文件名。"""
-    verified_filename: str = DEFAULT_VERIFIED_FILENAME
-    """已校验品牌 Excel 文件名。"""
-
-    @property
-    def rules_path(self) -> Path:
-        return self.excel_dir / self.rules_filename
-
-    @property
-    def verified_path(self) -> Path:
-        return self.excel_dir / self.verified_filename
+# 向后兼容：运行时配置使用 Pydantic RunConfigSchema
+RunConfig = RunConfigSchema
 
 
 def init_config(
@@ -72,7 +48,7 @@ def init_config(
     excel_dir: Path | None = None,
     output_dir: Path | None = None,
     log_dir: Path | None = None,
-) -> RunConfig:
+) -> RunConfigSchema:
     """
     初始化配置与日志：加载应用配置、创建日志目录、配置 logging，返回 RunConfig。
 
@@ -82,12 +58,12 @@ def init_config(
         log_dir: 日志目录，默认从 paths.get_log_dir() 获取。
 
     Returns:
-        RunConfig: 运行时路径配置，用于后续 load_data / save_output。
+        RunConfigSchema: 运行时路径配置，用于后续 load_data / save_output。
 
     Raises:
         无显式异常；路径不存在时仅创建 log_dir，excel/output 由后续步骤校验。
     """
-    _config = RunConfig(
+    _config = RunConfigSchema(
         excel_dir=excel_dir or get_excel_dir(),
         output_dir=output_dir or get_output_dir(),
         log_dir=log_dir or get_log_dir(),
@@ -120,7 +96,7 @@ def _setup_logging(log_dir: Path) -> None:
 
 
 def load_data(
-    config: RunConfig,
+    config: RunConfigSchema,
 ) -> tuple[list[CategoryRule], list[VerifiedBrand]]:
     """
     加载规则与已校验品牌数据。
@@ -235,7 +211,7 @@ def _ensure_model_and_embeddings(
 
 def _process_one_file(
     input_path: Path,
-    config: RunConfig,
+    config: RunConfigSchema,
     rules: list[CategoryRule],
     verified_brands: list[VerifiedBrand],
 ) -> Path | None:

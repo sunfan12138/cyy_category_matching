@@ -11,6 +11,7 @@ from core import (
     match_store,
 )
 from llm import get_category_description_with_search, get_category_description_with_search_async
+from models.schemas import MatchResult
 
 from .io import ResultRow
 
@@ -129,9 +130,10 @@ def _build_result_row(
     ref_score: float,
     llm_desc: str | None,
 ) -> ResultRow:
-    """根据单条匹配结果拼成一行 7 列。"""
+    """根据单条匹配结果构建 MatchResult 并转为 7 列 ResultRow。"""
     if not matched:
-        return (name, "", "", "", "未匹配", "", "")
+        result = MatchResult(raw_text=name, method="未匹配")
+        return result.to_result_row()
     if llm_desc is not None and llm_desc.strip() in LLM_UNMATCHED_ALIASES:
         method = "未搜索到"
     elif llm_desc is not None and not from_similarity:
@@ -141,7 +143,7 @@ def _build_result_row(
     else:
         method = "相似度" if from_similarity else "规则"
     ref_code = str(ref_brand.brand_code) if ref_brand else ""
-    ref_name = (ref_brand.brand_name or "") if ref_brand else ""
+    ref_name = (ref_brand.brand_name or "").strip() if ref_brand else ""
     ref_atomic = (ref_brand.atomic_category or "").strip() if ref_brand else ""
     score_str = f"{ref_score:.4f}" if from_similarity and ref_brand else ""
     if method == "规则":
@@ -168,15 +170,17 @@ def _build_result_row(
         level1_cat = "；".join(level1_parts) if level1_parts else ""
         code_cat = "；".join(code_parts) if code_parts else ""
         atomic_cat = "；".join(atomic_parts) if atomic_parts else ""
-    return (
-        name,
-        level1_cat,
-        code_cat,
-        atomic_cat,
-        method,
-        similarity_col,
-        llm_desc or "",
+    result = MatchResult(
+        raw_text=name,
+        level1_category=level1_cat,
+        category_code=code_cat,
+        atomic_category=atomic_cat,
+        method=method,
+        similarity_detail=similarity_col,
+        score=ref_score if from_similarity and ref_brand else 0.0,
+        llm_desc=llm_desc or "",
     )
+    return result.to_result_row()
 
 
 async def _match_one_with_sem(
