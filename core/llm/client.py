@@ -114,33 +114,44 @@ async def _call_llm_with_mcp_async(
     return None
 
 
+def _get_llm_call_params(rules: list[Any] | None) -> tuple[str, str, str, list[Any], str, str, str] | None:
+    """获取 LLM+MCP 调用参数；未配置时打 warning 并返回 None。"""
+    from core.conf import get_llm_config, get_mcp_config
+
+    api_key, base_url, model = get_llm_config()
+    if not api_key:
+        logger.warning(
+            "未配置大模型 API Key，跳过大模型调用（请配置 config/llm_config.json 或环境变量 OPENAI_API_KEY）"
+        )
+        return None
+    mcp_config = get_mcp_config()
+    if not mcp_config:
+        logger.warning(
+            "未找到 MCP 配置文件（mcp_client_config.json），大模型调用需要该文件；请将 mcp_client_config.json 放在 config 目录"
+        )
+        return None
+    from . import prompt as _prompt
+    prompt_base = _prompt.PROMPT_BASE
+    prompt_tools = _prompt.PROMPT_TOOLS
+    reference_keywords = _prompt.build_keyword_hint(rules) if rules else ""
+    return (api_key, base_url, model, mcp_config, prompt_base, prompt_tools, reference_keywords)
+
+
 def get_category_description_with_search(
     category_text: str,
     *,
     rules: list[Any] | None = None,
 ) -> str | None:
     """根据品类文本调用大模型（带 MCP 工具）生成品类描述；未配置或失败返回 None。"""
-    from core.conf import get_llm_config, get_mcp_config
-
-    api_key, base_url, model = get_llm_config()
-    if not api_key:
-        logger.warning("未配置大模型 API Key，跳过大模型调用（请配置 config/llm_config.json 或环境变量 OPENAI_API_KEY）")
+    params = _get_llm_call_params(rules)
+    if params is None:
         return None
-    mcp_config = get_mcp_config()
-    if not mcp_config:
-        logger.warning("未找到 MCP 配置文件（mcp_client_config.json），大模型调用需要该文件；请将 mcp_client_config.json 放在 config 目录")
-        return None
-    from . import prompt as _prompt
-    prompt_base = _prompt.PROMPT_BASE
-    prompt_tools = _prompt.PROMPT_TOOLS
-    reference_keywords = ""
-    if rules:
-        reference_keywords = _prompt.build_keyword_hint(rules)
+    api_key, base_url, model, mcp_config, prompt_base, prompt_tools, ref_kw = params
     try:
         return asyncio.run(
             _call_llm_with_mcp_async(
                 category_text, api_key, base_url, model,
-                mcp_config, prompt_base, prompt_tools, reference_keywords,
+                mcp_config, prompt_base, prompt_tools, ref_kw,
             )
         )
     except Exception as e:
@@ -154,24 +165,14 @@ async def get_category_description_with_search_async(
     rules: list[Any] | None = None,
 ) -> str | None:
     """异步：根据品类文本调用大模型（带 MCP 工具）生成品类描述；未配置或失败返回 None。"""
-    from core.conf import get_llm_config, get_mcp_config
-
-    api_key, base_url, model = get_llm_config()
-    if not api_key:
-        logger.warning("未配置大模型 API Key，跳过大模型调用（请配置 config/llm_config.json 或环境变量 OPENAI_API_KEY）")
+    params = _get_llm_call_params(rules)
+    if params is None:
         return None
-    mcp_config = get_mcp_config()
-    if not mcp_config:
-        logger.warning("未找到 MCP 配置文件（mcp_client_config.json），大模型调用需要该文件；请将 mcp_client_config.json 放在 config 目录")
-        return None
-    from . import prompt as _prompt
-    prompt_base = _prompt.PROMPT_BASE
-    prompt_tools = _prompt.PROMPT_TOOLS
-    reference_keywords = _prompt.build_keyword_hint(rules) if rules else ""
+    api_key, base_url, model, mcp_config, prompt_base, prompt_tools, ref_kw = params
     try:
         return await _call_llm_with_mcp_async(
             category_text, api_key, base_url, model,
-            mcp_config, prompt_base, prompt_tools, reference_keywords,
+            mcp_config, prompt_base, prompt_tools, ref_kw,
         )
     except Exception as e:
         logger.warning("大模型调用失败: %s", e)

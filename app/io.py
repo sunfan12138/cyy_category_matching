@@ -2,8 +2,7 @@
 
 from pathlib import Path
 
-import openpyxl  # type: ignore[import-untyped]
-from openpyxl.styles import Font  # type: ignore[import-untyped]
+from core.utils.excel_io import write_sheet
 
 # 匹配成功：关键词匹配到、相似度匹配到、搜索大模型后匹配到；其余为匹配失败
 MATCH_SUCCESS_METHODS = ("规则", "相似度", "搜索后匹配")
@@ -36,18 +35,10 @@ def read_categories_from_file(file_path: Path) -> list[str]:
 
 def write_result_excel(rows: list[ResultRow], output_path: Path) -> None:
     """将结果写入 Excel，未匹配行标红。"""
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    if ws is None:
-        raise RuntimeError("无法创建工作表")
-    ws.title = "匹配结果"
-    for col, h in enumerate(HEADERS, start=1):
-        ws.cell(row=1, column=col, value=h)
-    red_font = Font(color="FF0000")
-    for row_idx, row_data in enumerate(rows, start=2):
-        for col_idx, value in enumerate(row_data, start=1):
-            cell = ws.cell(row=row_idx, column=col_idx, value=value)
-            if len(row_data) > 4 and row_data[4] not in MATCH_SUCCESS_METHODS:
-                cell.font = red_font
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(output_path)
+    write_sheet(
+        output_path,
+        "匹配结果",
+        HEADERS,
+        rows,
+        failed_row_predicate=lambda row: len(row) > 4 and row[4] not in MATCH_SUCCESS_METHODS,
+    )

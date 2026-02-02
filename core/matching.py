@@ -2,7 +2,29 @@
 
 from __future__ import annotations
 
+from typing import Callable
+
 from .models import CategoryRule, VerifiedBrand
+
+
+def _argmax_with_threshold(
+    scores: list[float],
+    threshold: float,
+    *,
+    skip_indices: Callable[[int], bool] | None = None,
+) -> tuple[int, float] | None:
+    """返回 (最大分索引, 最大分)；若最大分 < threshold 或无有效项则返回 None。"""
+    best_score = -1.0
+    best_idx = -1
+    for i, s in enumerate(scores):
+        if skip_indices and skip_indices(i):
+            continue
+        if s > best_score:
+            best_score = s
+            best_idx = i
+    if best_idx < 0 or best_score < threshold:
+        return None
+    return best_idx, best_score
 
 
 def match_rule(text: str, rule: CategoryRule) -> bool:
@@ -72,37 +94,21 @@ def match_by_similarity(
     if not store_text or not verified_brands:
         return [], None, 0.0
 
+    def skip_empty_brand(i: int) -> bool:
+        return not (verified_brands[i].brand_name)
+
     use_cached = any(vb.embedding is not None for vb in verified_brands)
     if use_cached:
         from .embedding import similarity_scores_with_cached
-
         scores = similarity_scores_with_cached(store_text, verified_brands)
-        best_score = -1.0
-        best_idx = -1
-        for i, vb in enumerate(verified_brands):
-            if not vb.brand_name:
-                continue
-            s = scores[i] if i < len(scores) else 0.0
-            if s > best_score:
-                best_score = s
-                best_idx = i
-        if best_idx < 0 or best_score < threshold:
-            return [], None, 0.0
-        best_brand = verified_brands[best_idx]
+        best = _argmax_with_threshold(scores, threshold, skip_indices=skip_empty_brand)
     else:
-        best_score = -1.0
-        best_brand = None
-        for vb in verified_brands:
-            if not vb.brand_name:
-                continue
-            score = text_similarity(store_text, vb.brand_name)
-            if score > best_score:
-                best_score = score
-                best_brand = vb
-        if best_brand is None or best_score < threshold:
-            return [], None, 0.0
-
-    # 相似度匹配无品类编码，品牌编码仅出现在「原品牌编码」列
+        scores = [text_similarity(store_text, vb.brand_name) for vb in verified_brands]
+        best = _argmax_with_threshold(scores, threshold, skip_indices=skip_empty_brand)
+    if best is None:
+        return [], None, 0.0
+    best_idx, best_score = best
+    best_brand = verified_brands[best_idx]
     rule = CategoryRule(
         level1_category="",
         category_code="",

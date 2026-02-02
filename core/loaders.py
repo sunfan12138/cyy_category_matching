@@ -5,20 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import openpyxl  # type: ignore[import-untyped]
 from tqdm import tqdm  # type: ignore[import-untyped]
 
 from .models import CategoryRule, RuleSheetMeta, VerifiedBrand
+from .utils.excel_io import cell_value, open_excel_read
 
 KEYWORD_SEP = ",，、"
-
-
-def _cell_value(cell_or_value: Any) -> str:
-    """支持 openpyxl Cell 或裸值（如 iter_rows values_only=True）。"""
-    v = getattr(cell_or_value, "value", cell_or_value)
-    if v is None:
-        return ""
-    return str(v).strip()
 
 
 def _find_column(header: list[str], names: tuple[str, ...]) -> int | None:
@@ -97,32 +89,25 @@ def load_rules(excel_path: str | Path) -> tuple[RuleSheetMeta, list[CategoryRule
     if not path.exists():
         raise FileNotFoundError(f"文件不存在: {path}")
 
-    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    ws = wb.active
-    if ws is None:
-        wb.close()
-        raise ValueError("工作簿中没有活动表")
-
-    max_col = ws.max_column
-    max_row = ws.max_row
-    # 仅读前两行表头
-    row1 = next(ws.iter_rows(min_row=1, max_row=1, min_col=1, max_col=max_col, values_only=True))
-    row2 = next(ws.iter_rows(min_row=2, max_row=2, min_col=1, max_col=max_col, values_only=True))
-    logic_row = [_cell_value(v) for v in (row1 if row1 else [])]
-    field_row = [_cell_value(v) for v in (row2 if row2 else [])]
-    # 补齐长度
-    while len(logic_row) < max_col:
-        logic_row.append("")
-    while len(field_row) < max_col:
-        field_row.append("")
-    meta = RuleSheetMeta(logic_descriptions=logic_row[:max_col], field_descriptions=field_row[:max_col])
-
-    rules: list[CategoryRule] = []
-    data_rows = ws.iter_rows(min_row=3, max_row=max_row, min_col=1, max_col=max_col, values_only=True)
-    for row_tuple in tqdm(data_rows, total=max_row - 2, desc="解析规则", unit="行"):
-        row = list(row_tuple) if row_tuple else []
-        rules.append(_row_to_rule(row, logic_row, field_row))
-    wb.close()
+    with open_excel_read(path) as (_wb, ws):
+        if ws is None:
+            raise ValueError("工作簿中没有活动表")
+        max_col = ws.max_column
+        max_row = ws.max_row
+        row1 = next(ws.iter_rows(min_row=1, max_row=1, min_col=1, max_col=max_col, values_only=True))
+        row2 = next(ws.iter_rows(min_row=2, max_row=2, min_col=1, max_col=max_col, values_only=True))
+        logic_row = [cell_value(v) for v in (row1 if row1 else [])]
+        field_row = [cell_value(v) for v in (row2 if row2 else [])]
+        while len(logic_row) < max_col:
+            logic_row.append("")
+        while len(field_row) < max_col:
+            field_row.append("")
+        meta = RuleSheetMeta(logic_descriptions=logic_row[:max_col], field_descriptions=field_row[:max_col])
+        rules: list[CategoryRule] = []
+        data_rows = ws.iter_rows(min_row=3, max_row=max_row, min_col=1, max_col=max_col, values_only=True)
+        for row_tuple in tqdm(data_rows, total=max_row - 2, desc="解析规则", unit="行"):
+            row = list(row_tuple) if row_tuple else []
+            rules.append(_row_to_rule(row, logic_row, field_row))
     return meta, rules
 
 
@@ -135,45 +120,37 @@ def load_verified_brands(excel_path: str | Path) -> list[VerifiedBrand]:
     if not path.exists():
         return []
 
-    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    ws = wb.active
-    if ws is None:
-        wb.close()
-        return []
-
-    max_col = ws.max_column
-    max_row = ws.max_row
-    if max_row < 2:
-        wb.close()
-        return []
-
-    header_row = next(ws.iter_rows(min_row=1, max_row=1, min_col=1, max_col=max_col, values_only=True))
-    header = [_cell_value(v) for v in (header_row or [])]
-    col_code = _find_column(header, ("品牌编码",))
-    col_name = _find_column(header, ("品牌名称",))
-    col_keywords = _find_column(header, ("品牌关键词（，表示同时包含）",))
-    col_atomic = _find_column(header, ("原子品类",))
-    if col_name is None or col_atomic is None:
-        wb.close()
-        return []
-
-    result: list[VerifiedBrand] = []
-    data_rows = ws.iter_rows(min_row=2, max_row=max_row, min_col=1, max_col=max_col, values_only=True)
-    for row_tuple in tqdm(data_rows, total=max_row - 1, desc="解析已校验品牌", unit="行"):
-        row = list(row_tuple) if row_tuple else []
-        brand_name = _cell_value(row[col_name]) if col_name < len(row) else ""
-        if not brand_name:
-            continue
-        code_cell = row[col_code] if col_code is not None and col_code < len(row) else ""
-        keywords = _cell_value(row[col_keywords]) if col_keywords is not None and col_keywords < len(row) else ""
-        atomic = _cell_value(row[col_atomic]) if col_atomic < len(row) else ""
-        result.append(
-            VerifiedBrand(
-                brand_code=code_cell if code_cell != "" else "",
-                brand_name=brand_name,
-                brand_keywords=keywords,
-                atomic_category=atomic,
+    with open_excel_read(path) as (_wb, ws):
+        if ws is None:
+            return []
+        max_col = ws.max_column
+        max_row = ws.max_row
+        if max_row < 2:
+            return []
+        header_row = next(ws.iter_rows(min_row=1, max_row=1, min_col=1, max_col=max_col, values_only=True))
+        header = [cell_value(v) for v in (header_row or [])]
+        col_code = _find_column(header, ("品牌编码",))
+        col_name = _find_column(header, ("品牌名称",))
+        col_keywords = _find_column(header, ("品牌关键词（，表示同时包含）",))
+        col_atomic = _find_column(header, ("原子品类",))
+        if col_name is None or col_atomic is None:
+            return []
+        result: list[VerifiedBrand] = []
+        data_rows = ws.iter_rows(min_row=2, max_row=max_row, min_col=1, max_col=max_col, values_only=True)
+        for row_tuple in tqdm(data_rows, total=max_row - 1, desc="解析已校验品牌", unit="行"):
+            row = list(row_tuple) if row_tuple else []
+            brand_name = cell_value(row[col_name]) if col_name < len(row) else ""
+            if not brand_name:
+                continue
+            code_cell = row[col_code] if col_code is not None and col_code < len(row) else ""
+            keywords = cell_value(row[col_keywords]) if col_keywords is not None and col_keywords < len(row) else ""
+            atomic = cell_value(row[col_atomic]) if col_atomic < len(row) else ""
+            result.append(
+                VerifiedBrand(
+                    brand_code=code_cell if code_cell != "" else "",
+                    brand_name=brand_name,
+                    brand_keywords=keywords,
+                    atomic_category=atomic,
+                )
             )
-        )
-    wb.close()
     return result

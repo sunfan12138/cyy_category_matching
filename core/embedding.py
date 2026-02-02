@@ -157,7 +157,7 @@ def fill_brand_embeddings(verified_brands: list[VerifiedBrand]) -> None:
             batch_size=encode_batch_size,
             show_progress_bar=False,
         )
-        for i, vb in enumerate[VerifiedBrand](verified_brands[start:end]):
+        for i, vb in enumerate(verified_brands[start:end]):
             vb.embedding = emb[i].tolist()
 
 
