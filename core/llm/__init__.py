@@ -4,6 +4,6 @@
 配置见 core/llm/llm_config.py（llm_config.json 或环境变量）。
 """
 
-from .client import get_category_description_with_search
+from .client import get_category_description_with_search, get_category_description_with_search_async
 
-__all__ = ["get_category_description_with_search"]
+__all__ = ["get_category_description_with_search", "get_category_description_with_search_async"]
