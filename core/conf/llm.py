@@ -73,7 +73,7 @@ def load_llm_config() -> tuple[str | None, str, str]:
 
     config_path = _paths.get_llm_config_path_raw()
     if not config_path:
-        logger.warning("未找到 llm_config.json（已尝试 config 目录），大模型将不调用；可设置环境变量 CATEGORY_MATCHING_LLM_CONFIG 或 CATEGORY_MATCHING_CONFIG_DIR 指定路径")
+        logger.warning("未找到 llm_config.json")
     else:
         logger.info("大模型配置文件: %s", config_path)
         try:
@@ -96,7 +96,7 @@ def load_llm_config() -> tuple[str | None, str, str]:
                     api_key = dec
                     logger.info("大模型配置已加载（api_key_encrypted 解密成功），base_url=%s, model=%s", base_url, model)
                 else:
-                    logger.warning("api_key_encrypted 解密失败，请确认是用本项目 uv run -m llm.llm_config <明文key> 生成的密文；大模型将不调用")
+                    logger.warning("api_key_encrypted 解密失败，请确认是用本项目 uv run -m llm.llm_config <明文key> 生成的密文")
 
     if api_key is None:
         api_key = os.environ.get("OPENAI_API_KEY", "").strip() or None

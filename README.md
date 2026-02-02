@@ -54,7 +54,7 @@ category_matching/
 
 通过配置文件连接外部 MCP 服务器并调用其工具。
 
-1. **配置文件**：在 `config` 目录下放置 `mcp_client_config.json`（未打包=项目根/config，打包后=当前工作目录/config；或通过环境变量 `CATEGORY_MATCHING_CONFIG_DIR` 指定 config 目录）。
+1. **配置文件**：在 `config` 目录下放置 `mcp_client_config.json`（未打包=项目根/config，打包后=当前工作目录/config）。
 2. **格式**：JSON，包含 `servers` 数组；每项为 `name`、`transport`（`stdio` 或 `streamable-http`），以及：
    - **stdio**：`command`、`args`（可选 `env`、`cwd`）
    - **streamable-http**：`url`
@@ -80,7 +80,7 @@ category_matching/
 **key/url/model 可配置**，key 支持加密存储，**不可直接展示**（日志/界面仅脱敏显示）。
 
 - **key 优先级**：默认取环境变量 `OPENAI_API_KEY`（明文，不需解密）；若 `llm_config.json` 里配置了 key，则用配置的（`api_key` 明文 或 `api_key_encrypted` 需解密）。
-- **配置文件**：`config/llm_config.json`（未打包=项目根/config，打包后=当前工作目录/config；或环境变量 `CATEGORY_MATCHING_LLM_CONFIG` / `CATEGORY_MATCHING_CONFIG_DIR` 指定路径），格式示例：
+- **配置文件**：`config/llm_config.json`（未打包=项目根/config，打包后=当前工作目录/config），格式示例：
   ```json
   { "api_key": "可选明文", "api_key_encrypted": "可选加密字符串", "base_url": "https://api.openai.com/v1", "model": "gpt-3.5-turbo" }
   ```

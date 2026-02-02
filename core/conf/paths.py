@@ -23,8 +23,6 @@ def get_base_dir() -> Path:
 
 def _config_dir_candidates() -> list[Path]:
     """配置文件所在目录的候选；未打包=基准目录/config，打包后=当前工作目录/config。"""
-    if os.environ.get("CATEGORY_MATCHING_CONFIG_DIR"):
-        return [Path(os.environ["CATEGORY_MATCHING_CONFIG_DIR"]).resolve()]
     if getattr(sys, "frozen", False):
         return [Path.cwd() / "config"]
     return [get_base_dir() / "config"]
@@ -38,9 +36,6 @@ def get_config_dir_raw() -> Path:
 
 def get_llm_config_path_raw() -> Path | None:
     """大模型配置文件路径（不触发加载）。"""
-    if os.environ.get("CATEGORY_MATCHING_LLM_CONFIG"):
-        p = Path(os.environ["CATEGORY_MATCHING_LLM_CONFIG"]).resolve()
-        return p if p.exists() else None
     for config_dir in _config_dir_candidates():
         p = config_dir / "llm_config.json"
         if p.exists():

@@ -1,7 +1,16 @@
-"""品类匹配入口：加载规则后循环接受文件路径，批量匹配并输出到 output 目录。"""
+"""
+品类匹配入口：加载配置与规则后，接受品类文件路径，执行批量匹配并输出到 output 目录。
 
+流程拆分为：init_config -> load_data -> (循环) run_matching -> save_output，
+便于单测与维护；支持可选命令行参数（--input、--no-loop）。
+"""
+
+from __future__ import annotations
+
+import argparse
 import logging
 import sys
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -13,20 +22,95 @@ from app import (
 )
 from app.io import MATCH_SUCCESS_METHODS
 from paths import get_excel_dir, get_log_dir, get_output_dir
-from core import ensure_model_loaded, fill_brand_embeddings, load_rules, load_verified_brands
+from core import (
+    ensure_model_loaded,
+    fill_brand_embeddings,
+    load_rules,
+    load_verified_brands,
+)
 from core.conf import load_app_config
+from core.models import CategoryRule, VerifiedBrand
+
+# 7 列结果行类型（与 app.io.ResultRow 一致）
+ResultRow = tuple[str, str, str, str, str, str, str]
+
+logger = logging.getLogger(__name__)
+
+# 默认规则与已校验品牌文件名（可通过 RunConfig 覆盖）
+DEFAULT_RULES_FILENAME = "原子品类关键词.xlsx"
+DEFAULT_VERIFIED_FILENAME = "校验过的品牌对应原子品类.xlsx"
+DEFAULT_INPUT_STEM_IGNORE = "新建文本文档"
 
 
-def _setup_logging() -> None:
-    """将日志按日期写入 logs 目录，文件名 category_matching_YYYYMMDD.log，便于按日排查。"""
-    log_dir = get_log_dir()
+@dataclass
+class RunConfig:
+    """
+    运行时配置：路径与可选参数，便于注入与单测。
+    不包含大模型/ MCP 等业务配置（由 core.conf 管理）。
+    """
+
+    excel_dir: Path
+    """规则与已校验品牌 Excel 所在目录。"""
+    output_dir: Path
+    """匹配结果输出目录。"""
+    log_dir: Path
+    """日志文件目录。"""
+    rules_filename: str = DEFAULT_RULES_FILENAME
+    """规则 Excel 文件名。"""
+    verified_filename: str = DEFAULT_VERIFIED_FILENAME
+    """已校验品牌 Excel 文件名。"""
+
+    @property
+    def rules_path(self) -> Path:
+        return self.excel_dir / self.rules_filename
+
+    @property
+    def verified_path(self) -> Path:
+        return self.excel_dir / self.verified_filename
+
+
+def init_config(
+    *,
+    excel_dir: Path | None = None,
+    output_dir: Path | None = None,
+    log_dir: Path | None = None,
+) -> RunConfig:
+    """
+    初始化配置与日志：加载应用配置、创建日志目录、配置 logging，返回 RunConfig。
+
+    Args:
+        excel_dir: 规则/已校验品牌目录，默认从 paths.get_excel_dir() 获取。
+        output_dir: 结果输出目录，默认从 paths.get_output_dir() 获取。
+        log_dir: 日志目录，默认从 paths.get_log_dir() 获取。
+
+    Returns:
+        RunConfig: 运行时路径配置，用于后续 load_data / save_output。
+
+    Raises:
+        无显式异常；路径不存在时仅创建 log_dir，excel/output 由后续步骤校验。
+    """
+    load_app_config()
+    _config = RunConfig(
+        excel_dir=excel_dir or get_excel_dir(),
+        output_dir=output_dir or get_output_dir(),
+        log_dir=log_dir or get_log_dir(),
+    )
+    _setup_logging(_config.log_dir)
+    logger.info("配置已加载: excel_dir=%s, output_dir=%s", _config.excel_dir, _config.output_dir)
+    return _config
+
+
+def _setup_logging(log_dir: Path) -> None:
+    """
+    将日志按日期写入 log_dir，文件名 category_matching_YYYYMMDD.log。
+    若已存在指向当日日志文件的 FileHandler 则不再添加，避免重复。
+    """
     log_dir.mkdir(parents=True, exist_ok=True)
     today = datetime.now().strftime("%Y%m%d")
     log_file = log_dir / f"category_matching_{today}.log"
     log_path = str(log_file.resolve())
     root = logging.getLogger()
     root.setLevel(logging.INFO)
-    # 若已存在指向当日日志文件的 handler 则不再添加
     for h in root.handlers:
         if isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", "") == log_path:
             return
@@ -36,58 +120,234 @@ def _setup_logging() -> None:
     root.addHandler(handler)
 
 
-def main() -> None:
-    _setup_logging()
-    load_app_config()
-    excel_dir = get_excel_dir()
-    output_dir = get_output_dir()
-    rules_path = excel_dir / "原子品类关键词.xlsx"
-    verified_path = excel_dir / "校验过的品牌对应原子品类.xlsx"
+def load_data(
+    config: RunConfig,
+) -> tuple[list[CategoryRule], list[VerifiedBrand]]:
+    """
+    加载规则与已校验品牌数据。
 
+    Args:
+        config: 运行时配置，用于定位 rules_path、verified_path。
+
+    Returns:
+        (rules, verified_brands): 规则列表与已校验品牌列表。
+
+    Raises:
+        FileNotFoundError: 规则文件不存在。
+        ValueError: 规则文件无有效工作表或解析失败。
+    """
+    rules_path = config.rules_path
+    verified_path = config.verified_path
+
+    if not rules_path.exists():
+        logger.error("规则文件不存在: %s", rules_path)
+        raise FileNotFoundError(f"规则文件不存在: {rules_path}")
+
+    try:
+        _, rules = load_rules(rules_path)
+    except Exception as e:
+        logger.exception("加载规则文件失败: %s", rules_path)
+        raise ValueError(f"加载规则文件失败: {rules_path}") from e
+
+    if not rules:
+        logger.warning("规则文件为空或未解析到有效规则: %s", rules_path)
+
+    if not verified_path.exists():
+        logger.warning("已校验品牌文件不存在，将使用空列表: %s", verified_path)
+        verified_brands: list[VerifiedBrand] = []
+    else:
+        try:
+            verified_brands = load_verified_brands(verified_path)
+        except Exception as e:
+            logger.warning("加载已校验品牌文件失败，将使用空列表: %s", e)
+            verified_brands = []
+
+    logger.info("规则 %s 条，已校验品牌 %s 条", len(rules), len(verified_brands))
+    return rules, verified_brands
+
+
+def run_matching(
+    categories: list[str],
+    rules: list[CategoryRule],
+    verified_brands: list[VerifiedBrand],
+) -> list[ResultRow]:
+    """
+    对品类列表执行批量匹配，返回 7 列结果行。
+
+    Args:
+        categories: 待匹配品类名称列表。
+        rules: 规则列表（由 load_data 返回）。
+        verified_brands: 已校验品牌列表（由 load_data 返回）。
+
+    Returns:
+        与 categories 顺序一致的 7 列结果行列表（见 app.io.ResultRow）。
+    """
+    if not categories:
+        logger.warning("品类列表为空，跳过匹配")
+        return []
+    logger.info("共 %s 条品类，正在匹配...", len(categories))
+    try:
+        result = run_batch_match(categories, rules, verified_brands)
+    except Exception as e:
+        logger.exception("批量匹配失败")
+        raise RuntimeError("批量匹配失败") from e
+    return result
+
+
+def save_output(
+    result_rows: list[ResultRow],
+    output_dir: Path,
+    *,
+    source_stem: str | None = None,
+    ignore_stem: str = DEFAULT_INPUT_STEM_IGNORE,
+) -> Path:
+    """
+    将匹配结果写入 Excel 并保存到 output_dir。
+
+    Args:
+        result_rows: 7 列结果行（run_matching 返回值）。
+        output_dir: 输出目录，不存在时会创建。
+        source_stem: 输入文件名（无后缀），用于生成输出文件名；为空时使用「匹配结果_时间戳」。
+        ignore_stem: 当 source_stem 等于此值时视为未提供有意义文件名，按无 stem 处理。
+
+    Returns:
+        写入的 Excel 文件路径。
+
+    Raises:
+        RuntimeError: 写入 Excel 失败。
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if source_stem and source_stem != ignore_stem:
+        output_filename = f"{source_stem}_匹配结果_{stamp}.xlsx"
+    else:
+        output_filename = f"匹配结果_{stamp}.xlsx"
+    output_path = output_dir / output_filename
+    try:
+        write_result_excel(result_rows, output_path)
+    except Exception as e:
+        logger.exception("写入结果文件失败: %s", output_path)
+        raise RuntimeError(f"写入结果文件失败: {output_path}") from e
+    logger.info("已写入: %s", output_path)
+    return output_path
+
+
+def _ensure_model_and_embeddings(
+    verified_brands: list[VerifiedBrand],
+) -> None:
+    """加载 BGE 模型并填充已校验品牌向量；无品牌时仅加载模型。"""
     ensure_model_loaded()
-    # 解析规则与已校验品牌
-    _, rules = load_rules(rules_path)
-    verified_brands = load_verified_brands(verified_path)
-    print(f"规则 {len(rules)} 条，已校验品牌 {len(verified_brands)} 条。")
-    # 正在编码品牌名向量
-    fill_brand_embeddings(verified_brands)
-    print("请拖动或输入待匹配品类文件路径（每行一个品类），输入 q 退出。\n")
+    if verified_brands:
+        logger.info("正在编码品牌名向量...")
+        fill_brand_embeddings(verified_brands)
 
-    pending_path = " ".join(sys.argv[1:]).strip() if len(sys.argv) > 1 else None
+
+def _process_one_file(
+    input_path: Path,
+    config: RunConfig,
+    rules: list[CategoryRule],
+    verified_brands: list[VerifiedBrand],
+) -> Path | None:
+    """
+    处理单个品类文件：读取品类列表 -> 匹配 -> 写结果。
+    返回结果文件路径；读取或匹配失败时返回 None 并已打日志。
+    """
+    try:
+        categories = read_categories_from_file(input_path)
+    except Exception as e:
+        logger.warning("读取文件失败 %s: %s", input_path, e)
+        return None
+
+    if not categories:
+        logger.warning("文件中没有有效品类行: %s", input_path)
+        return None
+
+    try:
+        result_rows = run_matching(categories, rules, verified_brands)
+    except RuntimeError:
+        return None
+
+    unmatched = sum(1 for r in result_rows if r[4] not in MATCH_SUCCESS_METHODS)
+    logger.info("匹配成功 %s 条，匹配失败 %s 条（已标红）", len(result_rows) - unmatched, unmatched)
+    print(f"匹配成功 {len(result_rows) - unmatched} 条，匹配失败 {unmatched} 条（已标红）。")
+
+    stem = input_path.stem if input_path.stem != DEFAULT_INPUT_STEM_IGNORE else None
+    try:
+        out_path = save_output(result_rows, config.output_dir, source_stem=stem)
+    except RuntimeError:
+        return None
+    print(f"已写入: {out_path}")
+    return out_path
+
+
+def _parse_args(args: list[str] | None = None) -> argparse.Namespace:
+    """解析命令行参数；args 为 None 时使用 sys.argv，便于单测注入。"""
+    parser = argparse.ArgumentParser(
+        description="品类匹配：加载规则与已校验品牌，对输入品类文件执行匹配并输出 Excel。",
+    )
+    parser.add_argument(
+        "input_file",
+        nargs="?",
+        default=None,
+        help="待匹配品类文件路径（每行一个品类）；不指定则进入交互式输入。",
+    )
+    parser.add_argument(
+        "--no-loop",
+        action="store_true",
+        help="指定 input_file 时仅处理该文件一次后退出，不进入交互循环。",
+    )
+    return parser.parse_args(args)
+
+
+def main(args: list[str] | None = None) -> None:
+    """
+    入口：初始化配置 -> 加载数据 -> 加载模型与向量 -> 循环处理输入文件或处理单文件后退出。
+
+    支持命令行：
+      python main.py                    # 交互式输入文件路径
+      python main.py 文件.txt          # 处理该文件后继续交互
+      python main.py 文件.txt --no-loop # 仅处理该文件后退出
+    """
+    parsed = _parse_args(args)
+    config = init_config()
+
+    try:
+        rules, verified_brands = load_data(config)
+    except (FileNotFoundError, ValueError) as e:
+        logger.error("加载数据失败，退出: %s", e)
+        sys.exit(1)
+
+    _ensure_model_and_embeddings(verified_brands)
+    if not parsed.no_loop or not parsed.input_file:
+        print("请拖动或输入待匹配品类文件路径（每行一个品类），输入 q 退出。\n")
+    logger.info("请拖动或输入待匹配品类文件路径（每行一个品类），输入 q 退出。")
+
+    pending_path: str | None = parsed.input_file.strip() if parsed.input_file else None
+    if pending_path:
+        pending_path = pending_path.strip()
 
     while True:
-        file_path_str = pending_path or input("文件路径: ").strip()
+        file_path_str = pending_path if pending_path else input("文件路径: ").strip()
         pending_path = None
+
         if not file_path_str:
             continue
         if file_path_str.lower() in ("q", "quit", "exit"):
-            print("退出。")
+            logger.info("用户退出")
             break
 
         path = normalize_input_path(file_path_str)
         if not path or not path.exists():
+            logger.warning("文件不存在: %s", path)
             print(f"文件不存在: {path}\n")
             continue
 
-        try:
-            categories = read_categories_from_file(path)
-        except Exception as e:
-            print(f"读取失败: {e}\n")
-            continue
-        if not categories:
-            print("文件中没有有效品类行。\n")
-            continue
+        _process_one_file(path, config, rules, verified_brands)
+        # 控制台仍输出一行便于用户确认
+        print(f"已处理: {path}\n")
 
-        print(f"共 {len(categories)} 条品类，正在匹配...")
-        result_rows = run_batch_match(categories, rules, verified_brands)
-        unmatched = sum(1 for r in result_rows if r[4] not in MATCH_SUCCESS_METHODS)
-
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        stem = path.stem if path.stem != "新建文本文档" else ""
-        output_path = output_dir / (f"匹配结果_{stamp}.xlsx" if not stem else f"{stem}_匹配结果_{stamp}.xlsx")
-        write_result_excel(result_rows, output_path)
-        print(f"已写入: {output_path}")
-        print(f"匹配成功 {len(result_rows) - unmatched} 条，匹配失败 {unmatched} 条（已标红）。\n")
+        if parsed.no_loop and parsed.input_file:
+            break
 
 
 if __name__ == "__main__":
