@@ -43,7 +43,7 @@ category_matching/
 
 **Windows（仅 OneFile）**
 - 本地：`build.bat`（生成单文件 `dist\CategoryMatching.exe`）
-- 发布 zip 内含：CategoryMatching.exe、使用说明.txt、运行诊断.bat
+- 发布 zip 内含：CategoryMatching.exe、使用说明.txt
 
 **macOS**
 - 在项目根目录执行：`./build.sh`（需先 `chmod +x build.sh`）
@@ -95,4 +95,4 @@ category_matching/
 ## 使用与排错
 
 解压发布包后，在 exe 所在目录或当前工作目录下准备 `excel`、`model`、`output`、`config`（内含 `llm_config.json`、`mcp_client_config.json`），或通过环境变量指定路径后运行。  
-若出现 **“Failed to load Python DLL”** 或 **LoadLibrary** 报错，请查看同目录下的 **使用说明.txt**，按其中步骤操作（纯英文路径、VC++ 运行库、运行诊断.bat、OneFile 版等）。
+若出现 **“Failed to load Python DLL”** 或 **LoadLibrary** 报错，请查看同目录下的 **使用说明.txt**，按其中步骤操作（纯英文路径、VC++ 运行库、OneFile 版等）。
