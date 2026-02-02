@@ -11,12 +11,17 @@ import sys
 from pathlib import Path
 
 
+def _exe_dir() -> Path:
+    """打包为 exe 时，exe 所在目录（与 sys.executable 同目录）。"""
+    return Path(sys.executable).resolve().parent
+
+
 def get_base_dir() -> Path:
     """基准目录：打包后为 exe 所在目录，否则为 main.py 所在目录。"""
     if os.environ.get("CATEGORY_MATCHING_BASE_DIR"):
         return Path(os.environ["CATEGORY_MATCHING_BASE_DIR"]).resolve()
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
+        return _exe_dir()
     return Path(__file__).resolve().parent
 
 
@@ -58,10 +63,17 @@ def get_mcp_config_path() -> Path | None:
 
 
 def get_llm_config_path() -> Path | None:
-    """大模型配置文件路径；未设置或文件不存在时返回 None。"""
+    """大模型配置文件路径；未设置或文件不存在时返回 None。打包为 exe 时优先从 exe 同级目录查找。"""
     if os.environ.get("CATEGORY_MATCHING_LLM_CONFIG"):
         p = Path(os.environ["CATEGORY_MATCHING_LLM_CONFIG"]).resolve()
         return p if p.exists() else None
+    # 打包为 exe 时：先 exe 同级目录，再当前工作目录，再基准目录（避免 BASE_DIR 指向别处时找不到）
+    if getattr(sys, "frozen", False):
+        for base in (_exe_dir(), Path.cwd(), get_base_dir()):
+            p = base / "llm_config.json"
+            if p.exists():
+                return p
+        return None
     p = get_base_dir() / "llm_config.json"
     return p if p.exists() else None
 
