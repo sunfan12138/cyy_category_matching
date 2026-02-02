@@ -134,13 +134,13 @@ def get_category_description_with_search(
                     logger.info("  [第 %d 轮] 请求 | （含上轮工具返回）", round_no + 1)
                 _flush_log()
 
-                # 因可能先调用搜索再写描述，输出预留足够 token，避免被截断
+                # 因可能先调用搜索再写描述，且描述尽量多写以提高规则匹配率，预留较多 token
                 call_params = {
                     "model": model,
                     "messages": messages,
                     "tools": openai_tools,
                     "tool_choice": "auto",
-                    "max_tokens": 512,
+                    "max_tokens": 768,
                     "temperature": 0.3,
                 }
                 logger.info("  [大模型] 调用参数: %s", json.dumps(call_params, ensure_ascii=False, indent=2))

@@ -11,6 +11,7 @@ from app import (
     run_batch_match,
     write_result_excel,
 )
+from app.io import MATCH_SUCCESS_METHODS
 from paths import get_excel_dir, get_log_dir, get_output_dir
 from core import ensure_model_loaded, fill_brand_embeddings, load_rules, load_verified_brands
 
@@ -76,13 +77,14 @@ def main() -> None:
 
         print(f"共 {len(categories)} 条品类，正在匹配...")
         result_rows = run_batch_match(categories, rules, verified_brands)
-        unmatched = sum(1 for r in result_rows if r[4] == "未匹配")
+        unmatched = sum(1 for r in result_rows if r[4] not in MATCH_SUCCESS_METHODS)
 
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = output_dir / f"{path.stem}_匹配结果_{stamp}.xlsx"
+        stem = path.stem if path.stem != "新建文本文档" else ""
+        output_path = output_dir / (f"匹配结果_{stamp}.xlsx" if not stem else f"{stem}_匹配结果_{stamp}.xlsx")
         write_result_excel(result_rows, output_path)
         print(f"已写入: {output_path}")
-        print(f"匹配 {len(result_rows) - unmatched} 条，未匹配 {unmatched} 条（已标红）。\n")
+        print(f"匹配成功 {len(result_rows) - unmatched} 条，匹配失败 {unmatched} 条（已标红）。\n")
 
 
 if __name__ == "__main__":
