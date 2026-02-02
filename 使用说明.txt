@@ -140,16 +140,20 @@ config 文件夹放在与程序同一目录下。程序会在该文件夹中读�
 
 文件位置：config 文件夹内，文件名为 mcp_client_config.json（必须与此一致）。
 
-文件格式：JSON，包含一个名为 servers 的数组，数组中每项代表一个 MCP 服务器，可包含：
+文件格式：JSON，包含一个名为 servers 的数组，数组中每项代表一个 MCP 服务器。支持的连接方式有三种，每种所需字段如下：
 
-  name：该服务器的名称，用于区分，可自定。
-  transport：连接方式。常见有 sse、streamable-http、stdio 等，具体以提供方说明为准。
-  url：当连接方式为通过网页地址连接时填写，例如 https://xxx.xxx/sse。
-  command、args：当连接方式为本地命令时填写，一般由技术人员配置。
+  方式一 stdio（本地进程）：需填写 name、transport 为 "stdio"、command（启动命令）、args（命令参数，数组）。可选：env（环境变量，对象）、cwd（工作目录，字符串）。
+  方式二 streamable-http（网页接口）：需填写 name、transport 为 "streamable-http"、url（服务器地址）。
+  方式三 sse（网页 SSE）：需填写 name、transport 为 "sse"、url（服务器地址）。
 
-示例（仅作格式参考）：
-  使用网页地址的服务器：
-  {"servers":[{"name":"某搜索服务","transport":"sse","url":"https://example.com/sse"}]}
+示例（仅作格式参考，实际使用时按需保留一种或多种，并替换为真实命令或地址）：
+
+  servers 数组中包含三个示例项，分别对应三种连接方式：
+  第一项 stdio：name 为 "示例-stdio（本地进程）"，transport 为 "stdio"，command 为 "npx"，args 为 ["-y","@modelcontextprotocol/server-echo"]，可选 env 为 {}，cwd 为 null。
+  第二项 streamable-http：name 为 "示例-streamable-http"，transport 为 "streamable-http"，url 为 "https://your-mcp-server.example.com/mcp"。
+  第三项 sse：name 为 "示例-sse"，transport 为 "sse"，url 为 "https://your-mcp-server.example.com/sse"。
+
+  完整 JSON 结构可参考程序 config 目录下的 mcp_client_config.json.example 文件（复制为 mcp_client_config.json 后按需修改）。
 
 说明：MCP 配置通常由提供程序给您的人员或技术人员填写；若您未收到该文件或说明，可不创建此文件，程序照常运行，仅不使用外部 MCP 工具。
 

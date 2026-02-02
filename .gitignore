@@ -18,6 +18,7 @@ model/
 
 excel/
 
-# 大模型配置（含加密 key，勿提交）
+# 大模型与 MCP 配置（含 key/URL，勿提交；使用示例文件复制后填写）
 llm_config.json
 config/llm_config.json
+config/mcp_client_config.json

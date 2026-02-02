@@ -1,0 +1,6 @@
+{
+  "api_key": "请替换为您的 API Key（明文），或使用 api_key_encrypted",
+  "api_key_encrypted": "可选：使用 uv run -m llm.llm_config <明文key> 生成后填入",
+  "base_url": "https://api.openai.com/v1",
+  "model": "gpt-3.5-turbo"
+}
