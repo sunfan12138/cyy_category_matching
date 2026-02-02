@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import logging
-import os
 
 from models.schemas import LlmConfigResult, LlmConfigSchema
 
@@ -19,14 +18,14 @@ _DEFAULT_MODEL = "qwen-plus"
 def build_llm_config_result(schema: LlmConfigSchema) -> LlmConfigResult:
     """
     从 LlmConfigSchema（YAML/JSON 中的 llm 节）解析出 LlmConfigResult。
-    优先 api_key 明文，否则 api_key_encrypted 解密，否则环境变量 OPENAI_API_KEY。
+    优先 api_key 明文，否则 api_key_encrypted 解密；环境变量请用 api_key: \"${VAR}\" 在 YAML 中配置。
     """
     base_url = (schema.base_url or _DEFAULT_URL).rstrip("/")
     model = schema.model or _DEFAULT_MODEL
     api_key: str | None = None
     if schema.api_key and schema.api_key.strip():
         api_key = schema.api_key.strip()
-        logger.info("大模型配置已加载（api_key 明文），base_url=%s, model=%s", base_url, model)
+        logger.info("大模型配置已加载（api_key），base_url=%s, model=%s", base_url, model)
     elif schema.api_key_encrypted and schema.api_key_encrypted.strip():
         dec = decrypt_key(schema.api_key_encrypted.strip())
         if dec:
@@ -35,11 +34,10 @@ def build_llm_config_result(schema: LlmConfigSchema) -> LlmConfigResult:
         else:
             logger.warning("api_key_encrypted 解密失败，请确认使用 uv run -m core.config <明文key> 生成")
     if api_key is None:
-        api_key = os.environ.get("OPENAI_API_KEY", "").strip() or None
-        if api_key:
-            logger.info("大模型 API Key 来自环境变量 OPENAI_API_KEY")
-    if api_key is None:
-        logger.warning("未配置大模型 API Key（app_config.yaml 或环境变量 OPENAI_API_KEY），大模型将不调用")
+        logger.warning(
+            "未配置大模型 API Key（请在 app_config.yaml 的 llm.api_key 中配置，"
+            "或使用 api_key: \"${OPENAI_API_KEY}\" 引用环境变量）"
+        )
     return LlmConfigResult(api_key=api_key, base_url=base_url, model=model)
 
 

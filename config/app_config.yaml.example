@@ -2,6 +2,7 @@
 # 复制为 app_config.yaml 后按需修改；未填项使用下方默认值。
 
 # 大模型：API Key 可留空，使用 api_key_encrypted 或环境变量 OPENAI_API_KEY
+# api_key / api_key_encrypted 支持 ${VAR_NAME} 占位，会替换为环境变量值，例如 api_key: "${OPENAI_API_KEY}"
 llm:
   api_key: ""
   api_key_encrypted: ""
