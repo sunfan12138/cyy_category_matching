@@ -56,7 +56,15 @@ def match_store_categories(
         return matched, True, ref_brand, score, None
     # 相似度 < 0.9 时，调用大模型（带 MCP 工具），再对描述做规则匹配
     logger.info("开始调用大模型 [%s]：相似度 < 0.9", store_text[:40])
-    desc = get_category_description_with_search(store_text, rules=rules)
+    desc = get_category_description_with_search(
+        store_text,
+        rules=rules,
+        context={
+            "similarity_threshold": LLM_FALLBACK_SIMILARITY_THRESHOLD,
+            "similarity_score": round(score, 4),
+            "item": store_text[:50] + ("..." if len(store_text) > 50 else ""),
+        },
+    )
     if desc:
         if desc.strip() in LLM_UNMATCHED_ALIASES:
             return matched, True, ref_brand, score, LLM_UNMATCHED_MARKER
@@ -94,7 +102,15 @@ async def match_store_categories_async(
         logger.info("未进入 LLM/MCP [%s]：相似度 %.2f >= 0.9，直接采用相似度结果", store_text[:40], score)
         return matched, True, ref_brand, score, None
     logger.info("开始调用大模型 [%s]：相似度 < 0.9", store_text[:40])
-    desc = await get_category_description_with_search_async(store_text, rules=rules)
+    desc = await get_category_description_with_search_async(
+        store_text,
+        rules=rules,
+        context={
+            "similarity_threshold": LLM_FALLBACK_SIMILARITY_THRESHOLD,
+            "similarity_score": round(score, 4),
+            "item": store_text[:50] + ("..." if len(store_text) > 50 else ""),
+        },
+    )
     if desc:
         if desc.strip() in LLM_UNMATCHED_ALIASES:
             return matched, True, ref_brand, score, LLM_UNMATCHED_MARKER

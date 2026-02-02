@@ -34,8 +34,6 @@ from core.models import CategoryRule, VerifiedBrand
 # 7 列结果行类型（与 app.io.ResultRow 一致）
 ResultRow = tuple[str, str, str, str, str, str, str]
 
-logger = logging.getLogger(__name__)
-
 # 默认规则与已校验品牌文件名（可通过 RunConfig 覆盖）
 DEFAULT_RULES_FILENAME = "原子品类关键词.xlsx"
 DEFAULT_VERIFIED_FILENAME = "校验过的品牌对应原子品类.xlsx"
@@ -89,14 +87,15 @@ def init_config(
     Raises:
         无显式异常；路径不存在时仅创建 log_dir，excel/output 由后续步骤校验。
     """
-    load_app_config()
     _config = RunConfig(
         excel_dir=excel_dir or get_excel_dir(),
         output_dir=output_dir or get_output_dir(),
         log_dir=log_dir or get_log_dir(),
     )
+    # 先配置日志再加载配置，避免 load_app_config -> load_llm_config 的 warning 在无 handler 时打到控制台（lastResort -> stderr）
     _setup_logging(_config.log_dir)
-    logger.info("配置已加载: excel_dir=%s, output_dir=%s", _config.excel_dir, _config.output_dir)
+    load_app_config()
+    print(f"配置已加载: excel_dir={_config.excel_dir}, output_dir={_config.output_dir}")
     return _config
 
 
@@ -140,29 +139,27 @@ def load_data(
     verified_path = config.verified_path
 
     if not rules_path.exists():
-        logger.error("规则文件不存在: %s", rules_path)
         raise FileNotFoundError(f"规则文件不存在: {rules_path}")
 
     try:
         _, rules = load_rules(rules_path)
     except Exception as e:
-        logger.exception("加载规则文件失败: %s", rules_path)
         raise ValueError(f"加载规则文件失败: {rules_path}") from e
 
     if not rules:
-        logger.warning("规则文件为空或未解析到有效规则: %s", rules_path)
+        print(f"规则文件为空或未解析到有效规则: {rules_path}")
 
     if not verified_path.exists():
-        logger.warning("已校验品牌文件不存在，将使用空列表: %s", verified_path)
+        print(f"已校验品牌文件不存在，将使用空列表: {verified_path}")
         verified_brands: list[VerifiedBrand] = []
     else:
         try:
             verified_brands = load_verified_brands(verified_path)
         except Exception as e:
-            logger.warning("加载已校验品牌文件失败，将使用空列表: %s", e)
+            print(f"加载已校验品牌文件失败，将使用空列表: {e}")
             verified_brands = []
 
-    logger.info("规则 %s 条，已校验品牌 %s 条", len(rules), len(verified_brands))
+    print(f"规则 {len(rules)} 条，已校验品牌 {len(verified_brands)} 条。")
     return rules, verified_brands
 
 
@@ -183,13 +180,10 @@ def run_matching(
         与 categories 顺序一致的 7 列结果行列表（见 app.io.ResultRow）。
     """
     if not categories:
-        logger.warning("品类列表为空，跳过匹配")
         return []
-    logger.info("共 %s 条品类，正在匹配...", len(categories))
     try:
         result = run_batch_match(categories, rules, verified_brands)
     except Exception as e:
-        logger.exception("批量匹配失败")
         raise RuntimeError("批量匹配失败") from e
     return result
 
@@ -226,9 +220,7 @@ def save_output(
     try:
         write_result_excel(result_rows, output_path)
     except Exception as e:
-        logger.exception("写入结果文件失败: %s", output_path)
         raise RuntimeError(f"写入结果文件失败: {output_path}") from e
-    logger.info("已写入: %s", output_path)
     return output_path
 
 
@@ -238,7 +230,6 @@ def _ensure_model_and_embeddings(
     """加载 BGE 模型并填充已校验品牌向量；无品牌时仅加载模型。"""
     ensure_model_loaded()
     if verified_brands:
-        logger.info("正在编码品牌名向量...")
         fill_brand_embeddings(verified_brands)
 
 
@@ -255,11 +246,11 @@ def _process_one_file(
     try:
         categories = read_categories_from_file(input_path)
     except Exception as e:
-        logger.warning("读取文件失败 %s: %s", input_path, e)
+        print(f"读取文件失败 {input_path}: {e}")
         return None
 
     if not categories:
-        logger.warning("文件中没有有效品类行: %s", input_path)
+        print(f"文件中没有有效品类行: {input_path}")
         return None
 
     try:
@@ -268,7 +259,6 @@ def _process_one_file(
         return None
 
     unmatched = sum(1 for r in result_rows if r[4] not in MATCH_SUCCESS_METHODS)
-    logger.info("匹配成功 %s 条，匹配失败 %s 条（已标红）", len(result_rows) - unmatched, unmatched)
     print(f"匹配成功 {len(result_rows) - unmatched} 条，匹配失败 {unmatched} 条（已标红）。")
 
     stem = input_path.stem if input_path.stem != DEFAULT_INPUT_STEM_IGNORE else None
@@ -314,13 +304,12 @@ def main(args: list[str] | None = None) -> None:
     try:
         rules, verified_brands = load_data(config)
     except (FileNotFoundError, ValueError) as e:
-        logger.error("加载数据失败，退出: %s", e)
+        print(f"加载数据失败，退出: {e}")
         sys.exit(1)
 
     _ensure_model_and_embeddings(verified_brands)
     if not parsed.no_loop or not parsed.input_file:
         print("请拖动或输入待匹配品类文件路径（每行一个品类），输入 q 退出。\n")
-    logger.info("请拖动或输入待匹配品类文件路径（每行一个品类），输入 q 退出。")
 
     pending_path: str | None = parsed.input_file.strip() if parsed.input_file else None
     if pending_path:
@@ -333,17 +322,15 @@ def main(args: list[str] | None = None) -> None:
         if not file_path_str:
             continue
         if file_path_str.lower() in ("q", "quit", "exit"):
-            logger.info("用户退出")
+            print("退出。")
             break
 
         path = normalize_input_path(file_path_str)
         if not path or not path.exists():
-            logger.warning("文件不存在: %s", path)
             print(f"文件不存在: {path}\n")
             continue
 
         _process_one_file(path, config, rules, verified_brands)
-        # 控制台仍输出一行便于用户确认
         print(f"已处理: {path}\n")
 
         if parsed.no_loop and parsed.input_file:
