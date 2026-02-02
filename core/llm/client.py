@@ -62,19 +62,23 @@ async def get_category_description_with_search_async(
 
     api_key, base_url, model = load_llm_config()
     if not api_key:
+        logger.warning("未配置大模型 API Key，跳过大模型调用（请配置 llm_config.json、环境变量 OPENAI_API_KEY 或 exe 同级 .env 中的 OPENAI_API_KEY=xxx）")
         return None
 
     try:
         from mcp_client import load_config
         from paths import get_mcp_config_path
     except ImportError:
+        logger.warning("未安装 mcp_client，跳过大模型调用")
         return None
 
     config_path = get_mcp_config_path()
     if not config_path:
+        logger.warning("未找到 MCP 配置文件（mcp_client_config.json），大模型调用需要该文件；请将 mcp_client_config.json 放在 exe 同级目录或设置环境变量 CATEGORY_MATCHING_MCP_CONFIG")
         return None
     config_list = load_config(config_path)
     if not config_list:
+        logger.warning("MCP 配置文件为空或无效，跳过大模型调用")
         return None
 
     _httpx_log = logging.getLogger("httpx")

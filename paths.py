@@ -54,10 +54,16 @@ def get_log_dir() -> Path:
 
 
 def get_mcp_config_path() -> Path | None:
-    """MCP 客户端配置文件路径；未设置或文件不存在时返回 None。"""
+    """MCP 客户端配置文件路径；未设置或文件不存在时返回 None。打包为 exe 时从 exe 同级目录或当前目录查找。"""
     if os.environ.get("CATEGORY_MATCHING_MCP_CONFIG"):
         p = Path(os.environ["CATEGORY_MATCHING_MCP_CONFIG"]).resolve()
         return p if p.exists() else None
+    if getattr(sys, "frozen", False):
+        for base in (_exe_dir(), Path.cwd(), get_base_dir()):
+            p = base / "mcp_client_config.json"
+            if p.exists():
+                return p
+        return None
     p = get_base_dir() / "mcp_client_config.json"
     return p if p.exists() else None
 

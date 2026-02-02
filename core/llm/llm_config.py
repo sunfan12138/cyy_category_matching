@@ -11,8 +11,11 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # 解密用盐（固定，与加密脚本一致）
 _FERNET_SALT = b"category_matching_llm_salt_v1"
@@ -70,6 +73,33 @@ def decrypt_key(encrypted_b64: str, passphrase: str) -> str | None:
         return None
 
 
+def _load_api_key_from_dotenv() -> str | None:
+    """打包为 exe 时从 exe 同级目录的 .env 文件读取 OPENAI_API_KEY（双击启动时系统环境变量可能不可见）。"""
+    import sys
+    if not getattr(sys, "frozen", False):
+        return None
+    try:
+        exe_dir = Path(sys.executable).resolve().parent
+        env_file = exe_dir / ".env"
+        if not env_file.exists():
+            return None
+        for line in env_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            if key.strip().upper() == "OPENAI_API_KEY":
+                v = value.strip().strip("\"'")
+                if v:
+                    logger.info("大模型 API Key 来自 exe 同级目录 .env 文件")
+                    return v
+    except Exception:
+        pass
+    return None
+
+
 def load_llm_config() -> tuple[str | None, str, str]:
     """
     加载大模型配置：(api_key, base_url, model)。
@@ -84,27 +114,42 @@ def load_llm_config() -> tuple[str | None, str, str]:
     api_key: str | None = None
 
     config_path = get_llm_config_path()
-    if config_path:
+    if not config_path:
+        logger.warning("未找到 llm_config.json（已尝试 exe 同级目录、当前目录、基准目录），大模型将不调用；可设置环境变量 CATEGORY_MATCHING_LLM_CONFIG 指定配置文件路径")
+    else:
+        logger.info("大模型配置文件: %s", config_path)
         try:
             raw = config_path.read_text(encoding="utf-8")
             data = json.loads(raw)
-        except Exception:
+        except Exception as e:
+            logger.warning("读取 llm_config.json 失败: %s", e)
             data = {}
         base_url = (data.get("base_url") or _DEFAULT_URL).strip().rstrip("/")
         model = (data.get("model") or _DEFAULT_MODEL).strip()
-        # 配置里配了 key 则用配置的（明文直接取，加密需解密）
         plain_in_config = (data.get("api_key") or "").strip()
         if plain_in_config:
             api_key = plain_in_config
+            logger.info("大模型配置已加载（api_key 明文），base_url=%s, model=%s", base_url, model)
         else:
             enc = (data.get("api_key_encrypted") or "").strip()
             if enc:
                 dec = decrypt_key(enc, _KEY_PASSPHRASE)
                 if dec:
                     api_key = dec
+                    logger.info("大模型配置已加载（api_key_encrypted 解密成功），base_url=%s, model=%s", base_url, model)
+                else:
+                    logger.warning("api_key_encrypted 解密失败，请确认是用本项目 uv run -m core.llm.llm_config <明文key> 生成的密文；大模型将不调用")
 
     if api_key is None:
         api_key = os.environ.get("OPENAI_API_KEY", "").strip() or None
+        if api_key:
+            logger.info("大模型 API Key 来自环境变量 OPENAI_API_KEY")
+        else:
+            # 打包为 exe 时，双击启动可能拿不到系统环境变量，尝试从 exe 同级目录的 .env 读取
+            api_key = _load_api_key_from_dotenv()
+
+    if api_key is None:
+        logger.warning("未配置大模型 API Key（配置文件、OPENAI_API_KEY 或 exe 同级 .env），大模型将不调用")
 
     base_url = base_url.rstrip("/") if base_url else _DEFAULT_URL
     model = model or _DEFAULT_MODEL
