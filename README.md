@@ -50,7 +50,7 @@ category_matching/
 
 通过配置文件连接外部 MCP 服务器并调用其工具。
 
-1. **配置文件**：在 `config` 目录下放置 `mcp_client_config.json`（未打包=项目根/config，打包后=当前工作目录/config），或设置环境变量 `CATEGORY_MATCHING_MCP_CONFIG` / `CATEGORY_MATCHING_CONFIG_DIR`。
+1. **配置文件**：在 `config` 目录下放置 `mcp_client_config.json`（未打包=项目根/config，打包后=当前工作目录/config；或通过环境变量 `CATEGORY_MATCHING_CONFIG_DIR` 指定 config 目录）。
 2. **格式**：JSON，包含 `servers` 数组；每项为 `name`、`transport`（`stdio` 或 `streamable-http`），以及：
    - **stdio**：`command`、`args`（可选 `env`、`cwd`）
    - **streamable-http**：`url`

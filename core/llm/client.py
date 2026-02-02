@@ -128,7 +128,7 @@ def get_category_description_with_search(
         return None
     mcp_config = get_mcp_config()
     if not mcp_config:
-        logger.warning("未找到 MCP 配置文件（mcp_client_config.json），大模型调用需要该文件；请将 mcp_client_config.json 放在 config 目录或设置环境变量 CATEGORY_MATCHING_MCP_CONFIG")
+        logger.warning("未找到 MCP 配置文件（mcp_client_config.json），大模型调用需要该文件；请将 mcp_client_config.json 放在 config 目录")
         return None
     from . import prompt as _prompt
     prompt_base = _prompt.PROMPT_BASE
@@ -162,7 +162,7 @@ async def get_category_description_with_search_async(
         return None
     mcp_config = get_mcp_config()
     if not mcp_config:
-        logger.warning("未找到 MCP 配置文件（mcp_client_config.json），大模型调用需要该文件；请将 mcp_client_config.json 放在 config 目录或设置环境变量 CATEGORY_MATCHING_MCP_CONFIG")
+        logger.warning("未找到 MCP 配置文件（mcp_client_config.json），大模型调用需要该文件；请将 mcp_client_config.json 放在 config 目录")
         return None
     from . import prompt as _prompt
     prompt_base = _prompt.PROMPT_BASE

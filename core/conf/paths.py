@@ -49,10 +49,7 @@ def get_llm_config_path_raw() -> Path | None:
 
 
 def get_mcp_config_path_raw() -> Path | None:
-    """MCP 客户端配置文件路径（不触发加载）。"""
-    if os.environ.get("CATEGORY_MATCHING_MCP_CONFIG"):
-        p = Path(os.environ["CATEGORY_MATCHING_MCP_CONFIG"]).resolve()
-        return p if p.exists() else None
+    """MCP 客户端配置文件路径（不触发加载）；仅从 config 目录加载 mcp_client_config.json。"""
     for config_dir in _config_dir_candidates():
         p = config_dir / "mcp_client_config.json"
         if p.exists():
