@@ -1,5 +1,5 @@
 """
-大模型配置：从 core.conf 统一 re-export，保持原有调用方式兼容。
+大模型配置：从 core.config 统一 re-export，保持原有调用方式兼容。
 命令行加密：uv run -m llm.llm_config <明文key>
 """
 
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import sys
 
-from core.conf import (
+from core.config import (
     decrypt_key,
     encrypt_key,
     get_config_display,

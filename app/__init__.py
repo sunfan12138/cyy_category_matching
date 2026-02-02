@@ -3,7 +3,7 @@
 from paths import normalize_input_path
 
 from .batch_match import run_batch_match
-from .io import read_categories_from_file, write_result_excel
+from .file_io import read_categories_from_file, write_result_excel
 
 __all__ = [
     "normalize_input_path",

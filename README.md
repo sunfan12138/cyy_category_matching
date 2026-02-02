@@ -145,13 +145,14 @@ uv run main.py D:/data/品类列表.txt --no-loop
 | 路径 | 职责 |
 |------|------|
 | `main.py` | 入口：加载配置与规则 → 循环接受文件路径 → 批量匹配 → 输出 Excel；支持 `--input`、`--no-loop`。 |
-| `paths.py` | 路径与输入规范化：基准目录、excel/model/output/logs、用户路径解析（含 WSL 盘符转换）。 |
-| `app/` | 应用层：`batch_match.py` 批量匹配流程；`io.py` 品类文件读取、结果 Excel 写入。 |
-| `core/` | 核心领域：`models.py` 数据模型；`loaders.py` Excel 加载规则与品牌；`matching.py` 规则匹配与相似度回退；`embedding.py` BGE 向量与组合相似度；`conf/` 路径、LLM、MCP 配置；`utils/` Excel 读写、相似度计算。 |
+| `paths.py` | 路径入口：从 `core.config` 统一导出基准目录、excel/model/output/logs、用户路径规范化（含 WSL 盘符转换）。 |
+| `app/` | 应用层：`batch_match.py` 批量匹配流程；`file_io.py` 品类文件读取、结果 Excel 写入。 |
+| `core/` | 核心领域：`models.py` 数据模型；`loaders.py` Excel 加载规则与品牌；`matching.py` 规则匹配与相似度回退；`embedding.py` BGE 向量与组合相似度；`config/` 路径、LLM、MCP 配置（统一配置包）；`utils/` Excel 读写、相似度计算。 |
+| `models/` | Pydantic Schema：`schemas.py` 全局配置、类目节点、匹配结果及 JSON 配置解析（供 `core.config` 使用）。 |
 | `llm/` | 大模型封装：`prompt.py` 提示词；`client.py` 客户端（支持 MCP 工具）；`llm_config.py` 配置与加密 CLI（`uv run -m llm.llm_config <明文key>`）。 |
 | `mcp_client/` | MCP 客户端：通过 `config/mcp_client_config.json` 连接外部 MCP 服务器并调用工具。 |
-| `config/` | 配置文件目录：`llm_config.json`（大模型 API）、`mcp_client_config.json`（MCP 服务器）；未打包时在项目根下 `config/`，打包后为 exe 同目录下 `config/`。 |
-| `tests/` | 单元测试（`uv run pytest`）。 |
+| `config/` | 配置文件目录（JSON）：`llm_config.json`（大模型 API）、`mcp_client_config.json`（MCP 服务器）；未打包时在项目根下 `config/`，打包后为 exe 同目录下 `config/`。API Key 加密：`uv run -m core.config <明文key>`。 |
+| `tests/` | 单元测试（`uv run pytest`），`unit/` 下按模块划分。 |
 | `scripts/build.py` | 跨平台构建脚本，内部通过 uv 调用 PyInstaller。 |
 | `build.spec` / `build-onefile.spec` | PyInstaller 配置：onedir（目录）与 onefile（单文件）。 |
 

@@ -19,7 +19,7 @@ from app import (
     run_batch_match,
     write_result_excel,
 )
-from app.io import MATCH_SUCCESS_METHODS
+from app.file_io import MATCH_SUCCESS_METHODS
 from paths import get_excel_dir, get_log_dir, get_output_dir
 from core import (
     ensure_model_loaded,
@@ -27,7 +27,7 @@ from core import (
     load_rules,
     load_verified_brands,
 )
-from core.conf import load_app_config
+from core.config import load_app_config
 from core.models import CategoryRule, VerifiedBrand
 from models.schemas import RunConfigSchema
 

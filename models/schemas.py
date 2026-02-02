@@ -4,7 +4,7 @@ Pydantic V2 Schema：全局配置、类目节点、匹配结果及配置项解�
 - CategoryConfig: 全局配置、阈值与路径。
 - CategoryNode: 类目树节点（ID、名称、层级关系）。
 - MatchResult: 匹配输出（原始文本、预测类目、相似度得分）。
-- LlmConfigSchema / McpConfigSchema: JSON 配置解析，供 core.conf 使用。
+- LlmConfigSchema / McpConfigSchema: JSON 配置解析，供 core.config 使用。
 """
 
 from __future__ import annotations

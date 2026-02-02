@@ -97,7 +97,7 @@ def load_llm_config() -> tuple[str | None, str, str]:
                 api_key = dec
                 logger.info("大模型配置已加载（api_key_encrypted 解密成功），base_url=%s, model=%s", base_url, model)
             else:
-                logger.warning("api_key_encrypted 解密失败，请确认是用本项目 uv run -m llm.llm_config <明文key> 生成的密文")
+                logger.warning("api_key_encrypted 解密失败，请确认是用本项目 uv run -m core.config <明文key> 生成的密文")
 
     if api_key is None:
         api_key = os.environ.get("OPENAI_API_KEY", "").strip() or None

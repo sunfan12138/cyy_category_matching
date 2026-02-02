@@ -1,6 +1,6 @@
 """
 大模型客户端：根据品类文本生成品类描述，支持 MCP 工具（搜索等）。
-配置从 core.conf 获取（get_llm_config、get_mcp_config）。
+配置从 core.config 获取（get_llm_config、get_mcp_config）。
 日志：每轮调用、工具调用、耗时与异常均记录，便于调试与追踪；敏感信息（API Key）不输出。
 """
 
@@ -233,7 +233,7 @@ async def _call_llm_with_mcp_async(
 
 def _get_llm_call_params(rules: list[Any] | None) -> tuple[str, str, str, list[Any], str, str, str] | None:
     """获取 LLM+MCP 调用参数；未配置时打 warning 并返回 None。"""
-    from core.conf import get_llm_config, get_mcp_config
+    from core.config import get_llm_config, get_mcp_config
 
     api_key, base_url, model = get_llm_config()
     if not api_key:

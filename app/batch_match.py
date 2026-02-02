@@ -13,7 +13,7 @@ from core import (
 from llm import get_category_description_with_search, get_category_description_with_search_async
 from models.schemas import MatchResult
 
-from .io import ResultRow
+from .file_io import ResultRow
 
 logger = logging.getLogger(__name__)
 
