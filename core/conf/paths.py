@@ -22,9 +22,7 @@ def get_base_dir() -> Path:
 
 
 def _config_dir_candidates() -> list[Path]:
-    """配置文件所在目录的候选；未打包=基准目录/config，打包后=当前工作目录/config。"""
-    if getattr(sys, "frozen", False):
-        return [Path.cwd() / "config"]
+    """配置文件所在目录的候选；未打包=基准目录/config，打包后=exe 所在目录/config（与 exe 同级）。"""
     return [get_base_dir() / "config"]
 
 
