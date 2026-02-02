@@ -17,14 +17,15 @@ from core import ensure_model_loaded, fill_brand_embeddings, load_rules, load_ve
 
 
 def _setup_logging() -> None:
-    """将日志写入 logs 目录下的 category_matching.log，便于排查模型调用等。"""
+    """将日志按日期写入 logs 目录，文件名 category_matching_YYYYMMDD.log，便于按日排查。"""
     log_dir = get_log_dir()
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / "category_matching.log"
+    today = datetime.now().strftime("%Y%m%d")
+    log_file = log_dir / f"category_matching_{today}.log"
     log_path = str(log_file.resolve())
     root = logging.getLogger()
     root.setLevel(logging.INFO)
-    # 始终确保本程序的日志文件 handler 存在（避免因 root 已有其他 handler 导致不创建文件）
+    # 若已存在指向当日日志文件的 handler 则不再添加
     for h in root.handlers:
         if isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", "") == log_path:
             return
