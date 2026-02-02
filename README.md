@@ -22,7 +22,9 @@ category_matching/
 ├── mcp_client/         # MCP 客户端（可选，通过配置连接外部 MCP 工具）
 │   ├── config.py       # 配置加载
 │   └── manager.py      # 连接与 list_tools / call_tool
-├── mcp_client_config.json
+├── config/             # 配置文件目录（未打包=项目根/config，打包后=当前工作目录/config）
+│   ├── llm_config.json       # 大模型配置（可选，含 api_key/base_url/model）
+│   └── mcp_client_config.json # MCP 服务器配置
 ├── build-onefile.spec   # Windows 打包（OneFile）
 ├── build.spec           # macOS 打包（onedir）
 └── excel/ model/ output/  # 数据与输出目录
@@ -48,7 +50,7 @@ category_matching/
 
 通过配置文件连接外部 MCP 服务器并调用其工具。
 
-1. **配置文件**：在项目根目录放置 `mcp_client_config.json`，或设置环境变量 `CATEGORY_MATCHING_MCP_CONFIG` 指向该文件。
+1. **配置文件**：在 `config` 目录下放置 `mcp_client_config.json`（未打包=项目根/config，打包后=当前工作目录/config），或设置环境变量 `CATEGORY_MATCHING_MCP_CONFIG` / `CATEGORY_MATCHING_CONFIG_DIR`。
 2. **格式**：JSON，包含 `servers` 数组；每项为 `name`、`transport`（`stdio` 或 `streamable-http`），以及：
    - **stdio**：`command`、`args`（可选 `env`、`cwd`）
    - **streamable-http**：`url`
@@ -65,7 +67,7 @@ category_matching/
    ```
 4. **同步调用**：`from mcp_client import run_async`，用 `run_async(coro)` 包装单次异步调用。
 
-示例配置见仓库内 `mcp_client_config.json`。
+示例配置见仓库内 `config/mcp_client_config.json`。
 
 ## 大模型二次规则匹配（相似度 &lt; 0.9）
 
@@ -74,7 +76,7 @@ category_matching/
 **key/url/model 可配置**，key 支持加密存储，**不可直接展示**（日志/界面仅脱敏显示）。
 
 - **key 优先级**：默认取环境变量 `OPENAI_API_KEY`（明文，不需解密）；若 `llm_config.json` 里配置了 key，则用配置的（`api_key` 明文 或 `api_key_encrypted` 需解密）。
-- **配置文件**：项目根目录 `llm_config.json`（或环境变量 `CATEGORY_MATCHING_LLM_CONFIG` 指定路径），格式示例：
+- **配置文件**：`config/llm_config.json`（未打包=项目根/config，打包后=当前工作目录/config；或环境变量 `CATEGORY_MATCHING_LLM_CONFIG` / `CATEGORY_MATCHING_CONFIG_DIR` 指定路径），格式示例：
   ```json
   { "api_key": "可选明文", "api_key_encrypted": "可选加密字符串", "base_url": "https://api.openai.com/v1", "model": "gpt-3.5-turbo" }
   ```
@@ -88,5 +90,5 @@ category_matching/
 
 ## 使用与排错
 
-解压发布包后，将 `excel`、`model`、`output` 与 exe 放在同一目录下运行。  
+解压发布包后，在 exe 所在目录或当前工作目录下准备 `excel`、`model`、`output`、`config`（内含 `llm_config.json`、`mcp_client_config.json`），或通过环境变量指定路径后运行。  
 若出现 **“Failed to load Python DLL”** 或 **LoadLibrary** 报错，请查看同目录下的 **使用说明.txt**，按其中步骤操作（纯英文路径、VC++ 运行库、运行诊断.bat、OneFile 版等）。

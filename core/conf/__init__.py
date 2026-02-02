@@ -1,0 +1,158 @@
+"""
+conf 模块：整合 llm_config、mcp_config、core config。
+
+- 路径：config 目录、llm_config.json、mcp_client_config.json（见 .paths）
+- 大模型配置：api_key、base_url、model；加解密与脱敏（见 .llm）
+- MCP 配置：ServerConfig、load_mcp_config（见 .mcp）
+- 统一加载：load_app_config() 启动时调用一次，get_* 返回已缓存配置。
+"""
+
+from __future__ import annotations
+
+import logging
+import sys
+from pathlib import Path
+from typing import Any
+
+from . import llm as _llm
+from . import mcp as _mcp
+from . import paths as _paths
+
+logger = logging.getLogger(__name__)
+
+# ----- 路径（直接转发） -----
+
+get_config_dir_raw = _paths.get_config_dir_raw
+get_llm_config_path_raw = _paths.get_llm_config_path_raw
+get_mcp_config_path_raw = _paths.get_mcp_config_path_raw
+
+# ----- LLM（直接转发） -----
+
+mask_key = _llm.mask_key
+encrypt_key = _llm.encrypt_key
+decrypt_key = _llm.decrypt_key
+load_llm_config = _llm.load_llm_config
+
+# ----- MCP（直接转发） -----
+
+ServerConfig = _mcp.ServerConfig
+load_mcp_config = _mcp.load_mcp_config
+
+# ----- 统一加载与缓存 -----
+
+_loaded = False
+_config_dir: Path | None = None
+_llm_config_path: Path | None = None
+_mcp_config_path: Path | None = None
+_llm_config: tuple[str | None, str, str] | None = None
+_mcp_config: list[Any] | None = None
+
+
+def load_app_config() -> None:
+    """加载全部配置（config 目录、llm、mcp），仅需在程序启动时调用一次。"""
+    global _loaded, _config_dir, _llm_config_path, _mcp_config_path, _llm_config, _mcp_config
+
+    if _loaded:
+        return
+
+    _config_dir = get_config_dir_raw()
+    _llm_config_path = get_llm_config_path_raw()
+    _mcp_config_path = get_mcp_config_path_raw()
+
+    _llm_config = load_llm_config()
+
+    if _mcp_config_path:
+        try:
+            _mcp_config = load_mcp_config(_mcp_config_path) or []
+        except Exception as e:
+            logger.warning("加载 MCP 配置失败: %s", e)
+            _mcp_config = []
+    else:
+        _mcp_config = []
+
+    _loaded = True
+    logger.debug("公用配置已加载: config_dir=%s, llm_path=%s, mcp_path=%s", _config_dir, _llm_config_path, _mcp_config_path)
+
+
+def get_config_dir() -> Path:
+    """配置文件目录（config）；未加载时先触发 load_app_config()。"""
+    if not _loaded:
+        load_app_config()
+    assert _config_dir is not None
+    return _config_dir
+
+
+def get_llm_config_path() -> Path | None:
+    """大模型配置文件路径；未加载时先触发 load_app_config()。"""
+    if not _loaded:
+        load_app_config()
+    return _llm_config_path
+
+
+def get_mcp_config_path() -> Path | None:
+    """MCP 客户端配置文件路径；未加载时先触发 load_app_config()。"""
+    if not _loaded:
+        load_app_config()
+    return _mcp_config_path
+
+
+def get_llm_config() -> tuple[str | None, str, str]:
+    """大模型配置 (api_key, base_url, model)；未加载时先触发 load_app_config()。"""
+    if not _loaded:
+        load_app_config()
+    assert _llm_config is not None
+    return _llm_config
+
+
+def get_mcp_config() -> list[Any]:
+    """MCP 客户端配置列表；未加载时先触发 load_app_config()。"""
+    if not _loaded:
+        load_app_config()
+    assert _mcp_config is not None
+    return _mcp_config
+
+
+def get_config_display() -> dict[str, str]:
+    """用于界面/日志的配置展示：base_url、model、key 脱敏。"""
+    api_key, base_url, model = get_llm_config()
+    return {
+        "base_url": base_url,
+        "model": model,
+        "api_key_masked": mask_key(api_key),
+        "configured": "是" if api_key else "否",
+    }
+
+
+# ----- CLI：加密 key -----
+
+def main_encrypt() -> None:
+    """命令行：uv run -m core.conf encrypt <明文key> 或 uv run -m core.conf <明文key>"""
+    if len(sys.argv) < 2:
+        print("用法: uv run -m core.conf encrypt <明文API_Key>  或  uv run -m core.conf <明文API_Key>")
+        print("输出加密后的字符串，填入 llm_config.json 的 api_key_encrypted。")
+        sys.exit(1)
+    plain = (sys.argv[2] if len(sys.argv) >= 3 and sys.argv[1] == "encrypt" else sys.argv[1]).strip()
+    enc = encrypt_key(plain)
+    print("将下面一行填入 llm_config.json 的 api_key_encrypted：")
+    print(enc)
+
+
+__all__ = [
+    "load_app_config",
+    "get_config_dir",
+    "get_config_dir_raw",
+    "get_llm_config",
+    "get_llm_config_path",
+    "get_llm_config_path_raw",
+    "get_mcp_config",
+    "get_mcp_config_path",
+    "get_mcp_config_path_raw",
+    "get_config_display",
+    "load_llm_config",
+    "mask_key",
+    "encrypt_key",
+    "decrypt_key",
+    "ServerConfig",
+    "load_mcp_config",
+    "main_encrypt",
+]

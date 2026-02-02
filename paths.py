@@ -1,8 +1,6 @@
 """
-路径与输入规范化：基准目录、model/excel/output、MCP 配置、用户路径解析。
-
-- 未打包：以 main.py 所在目录为基准；打包后以 exe 所在目录为基准。
-- 环境变量：CATEGORY_MATCHING_BASE_DIR / MODEL_DIR / EXCEL_DIR / OUTPUT_DIR / LOG_DIR / MCP_CONFIG
+路径与输入规范化：基准目录、model/excel/output、用户路径解析。
+配置相关（config 目录、llm_config.json、mcp_client_config.json）已统一到 core.conf 模块。
 """
 
 import os
@@ -53,35 +51,22 @@ def get_log_dir() -> Path:
     return get_base_dir() / "logs"
 
 
-def get_mcp_config_path() -> Path | None:
-    """MCP 客户端配置文件路径；未设置或文件不存在时返回 None。打包为 exe 时从 exe 同级目录或当前目录查找。"""
-    if os.environ.get("CATEGORY_MATCHING_MCP_CONFIG"):
-        p = Path(os.environ["CATEGORY_MATCHING_MCP_CONFIG"]).resolve()
-        return p if p.exists() else None
-    if getattr(sys, "frozen", False):
-        for base in (_exe_dir(), Path.cwd(), get_base_dir()):
-            p = base / "mcp_client_config.json"
-            if p.exists():
-                return p
-        return None
-    p = get_base_dir() / "mcp_client_config.json"
-    return p if p.exists() else None
+def get_config_dir() -> Path:
+    """配置文件目录（config）；委托 core.conf。"""
+    from core.conf import get_config_dir as _get
+    return _get()
 
 
 def get_llm_config_path() -> Path | None:
-    """大模型配置文件路径；未设置或文件不存在时返回 None。打包为 exe 时优先从 exe 同级目录查找。"""
-    if os.environ.get("CATEGORY_MATCHING_LLM_CONFIG"):
-        p = Path(os.environ["CATEGORY_MATCHING_LLM_CONFIG"]).resolve()
-        return p if p.exists() else None
-    # 打包为 exe 时：先 exe 同级目录，再当前工作目录，再基准目录（避免 BASE_DIR 指向别处时找不到）
-    if getattr(sys, "frozen", False):
-        for base in (_exe_dir(), Path.cwd(), get_base_dir()):
-            p = base / "llm_config.json"
-            if p.exists():
-                return p
-        return None
-    p = get_base_dir() / "llm_config.json"
-    return p if p.exists() else None
+    """大模型配置文件路径；委托 core.conf。"""
+    from core.conf import get_llm_config_path as _get
+    return _get()
+
+
+def get_mcp_config_path() -> Path | None:
+    """MCP 客户端配置文件路径；委托 core.conf。"""
+    from core.conf import get_mcp_config_path as _get
+    return _get()
 
 
 def normalize_input_path(raw: str) -> Path:

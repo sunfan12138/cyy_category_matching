@@ -14,6 +14,7 @@ from app import (
 from app.io import MATCH_SUCCESS_METHODS
 from paths import get_excel_dir, get_log_dir, get_output_dir
 from core import ensure_model_loaded, fill_brand_embeddings, load_rules, load_verified_brands
+from core.conf import load_app_config
 
 
 def _setup_logging() -> None:
@@ -37,6 +38,7 @@ def _setup_logging() -> None:
 
 def main() -> None:
     _setup_logging()
+    load_app_config()
     excel_dir = get_excel_dir()
     output_dir = get_output_dir()
     rules_path = excel_dir / "原子品类关键词.xlsx"
