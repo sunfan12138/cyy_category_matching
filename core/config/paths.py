@@ -1,7 +1,7 @@
 """
 路径解析：基准目录、配置目录、模型/Excel/输出/日志目录及用户输入路径规范化。
 
-- 配置相关：config 目录、llm_config.json、mcp_client_config.json
+- 配置相关：config 目录、app_config.yaml
 - 应用目录：model、excel、output、logs
 """
 
@@ -38,22 +38,14 @@ def get_config_dir_raw() -> Path:
     return candidates[0] if candidates else get_base_dir() / "config"
 
 
-def get_llm_config_path_raw() -> Path | None:
-    """大模型配置文件路径（不触发加载）。"""
-    for config_dir in _config_dir_candidates():
-        p = config_dir / "llm_config.json"
-        if p.exists():
-            return p
-    return None
+def get_llm_config_path_raw() -> Path:
+    """大模型配置所在文件路径（app_config.yaml，不触发加载）。"""
+    return get_config_dir_raw() / "app_config.yaml"
 
 
-def get_mcp_config_path_raw() -> Path | None:
-    """MCP 客户端配置文件路径（不触发加载）。"""
-    for config_dir in _config_dir_candidates():
-        p = config_dir / "mcp_client_config.json"
-        if p.exists():
-            return p
-    return None
+def get_mcp_config_path_raw() -> Path:
+    """MCP 客户端配置所在文件路径（app_config.yaml，不触发加载）。"""
+    return get_config_dir_raw() / "app_config.yaml"
 
 
 def get_model_dir() -> Path:

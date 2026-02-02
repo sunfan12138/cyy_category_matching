@@ -127,7 +127,7 @@ uv run main.py 待匹配品类.txt --no-loop
 - **llm_client**：max_tokens、日志摘要长度
 - **prompt**：参考关键词条数与字数
 
-首次使用：将 **config/app_config.yaml.example** 复制为 **config/app_config.yaml**，按需修改。若未创建 app_config.yaml，程序会使用内置默认值，并尝试从旧版 **llm_config.json**、**mcp_client_config.json** 读取 llm/mcp 配置（兼容旧项目）。
+首次使用：将 **config/app_config.yaml.example** 复制为 **config/app_config.yaml**，按需修改。若未创建 app_config.yaml，程序使用内置默认值。
 
 ### 4.5 常见使用示例
 
@@ -165,7 +165,7 @@ uv run main.py D:/data/品类列表.txt --no-loop
 | `models/` | Pydantic Schema：`schemas.py` 全局配置、类目节点、匹配结果及 JSON 配置解析（供 `core.config` 使用）。 |
 | `llm/` | 大模型封装：`prompt.py` 提示词；`client.py` 客户端（支持 MCP 工具）；`llm_config.py` 配置与加密 CLI（`uv run -m llm.llm_config <明文key>`）。 |
 | `mcp_client/` | MCP 客户端：通过 `config/app_config.yaml` 的 `mcp.servers` 连接外部 MCP 服务器并调用工具。 |
-| `config/` | 配置文件目录：**app_config.yaml**（统一 YAML，含 llm、mcp、matching、app、embedding、llm_client、prompt）；复制 `app_config.yaml.example` 为 `app_config.yaml` 后修改。兼容旧版 `llm_config.json`、`mcp_client_config.json`（无 YAML 或某节缺失时自动回退）。API Key 加密：`uv run -m core.config <明文key>`。 |
+| `config/` | 配置文件目录：**app_config.yaml**（统一 YAML，含 llm、mcp、matching、app、embedding、llm_client、prompt）；复制 `app_config.yaml.example` 为 `app_config.yaml` 后修改。API Key 加密：`uv run -m core.config <明文key>`。 |
 | `tests/` | 单元测试（`uv run pytest`），`unit/` 下按模块划分。 |
 | `scripts/build.py` | 跨平台构建脚本，内部通过 uv 调用 PyInstaller。 |
 | `build.spec` / `build-onefile.spec` | PyInstaller 配置：onedir（目录）与 onefile（单文件）。 |
@@ -284,4 +284,4 @@ $env:BUILD_TARGET="onefile"; uv run python scripts/build.py
 ### 8.2 推荐使用方式
 
 - **开发者**：克隆后 `uv sync --group dev`，将 `config/app_config.yaml.example` 复制为 `config/app_config.yaml` 并按需修改；日常使用 `uv run main.py` 或 `uv run category-matching` 运行，用 `uv run pytest` 跑测试，用 `uv run python scripts/build.py` 打包。
-- **非开发用户**：使用发布包中的可执行文件，将 `excel`、`model`、`output` 与可执行文件放在同一目录（或通过环境变量指定），直接运行；大模型与 MCP 为可选，需时在 `config/` 下配置 **app_config.yaml**（或旧版 `llm_config.json`、`mcp_client_config.json`）。
+- **非开发用户**：使用发布包中的可执行文件，将 `excel`、`model`、`output` 与可执行文件放在同一目录（或通过环境变量指定），直接运行；大模型与 MCP 为可选，需时在 `config/` 下配置 **app_config.yaml**。

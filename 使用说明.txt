@@ -109,60 +109,28 @@ macOS / Linux 用户
 六、config 目录下配置文件说明
 ========================================
 
-config 文件夹放在与程序同一目录下。程序会在该文件夹中读取以下两个配置文件（均为 JSON 格式）。不配置时程序仍可运行，但不会调用大模型与外部工具；配置后，当相似度匹配结果较低时，程序会尝试调用大模型或外部工具辅助匹配。
+config 文件夹放在与程序同一目录下。程序在该文件夹中读取统一配置文件 **app_config.yaml**（YAML 格式）。不配置时程序仍可运行，但不会调用大模型与外部工具；配置后，当相似度匹配结果较低时，程序会尝试调用大模型或外部工具辅助匹配。
 
 
-（1）大模型配置：llm_config.json
+（1）统一配置文件：app_config.yaml
 ----------------------------------------
 
-作用：当相似度匹配结果不够高时，程序可调用大模型根据品类文本生成描述，再按规则匹配。未配置时该步骤自动跳过。
+作用：集中配置大模型（llm）、MCP 外部工具（mcp）、匹配参数、应用参数等。未创建该文件时程序使用内置默认值。
 
-文件位置：config 文件夹内，文件名为 llm_config.json（必须与此一致）。
+文件位置：config 文件夹内，文件名为 app_config.yaml（必须与此一致）。
 
-文件格式：使用记事本或任意文本编辑器打开后，为 JSON 格式，可包含以下内容（均为英文键名）：
+使用方式：将程序 config 目录下的 **app_config.yaml.example** 复制为 **app_config.yaml**，用记事本或任意文本编辑器打开后按需修改。
 
-  api_key：大模型接口的 API 密钥，明文填写。若您希望不写明文，可使用下面的 api_key_encrypted。
-  api_key_encrypted：加密后的 API 密钥。若由提供方或技术人员为您生成加密串，可只填此项，不填 api_key。
-  base_url：大模型接口的地址。例如 OpenAI 兼容接口为 https://api.openai.com/v1；若不填，程序使用默认地址。
-  model：模型名称。例如 gpt-3.5-turbo、qwen-plus 等；若不填，程序使用默认模型。
+主要配置节说明：
 
-示例（仅作格式参考，请勿直接复制密钥）：
-  单行示例：{"api_key":"您的密钥","base_url":"https://api.openai.com/v1","model":"gpt-3.5-turbo"}
-  或使用加密密钥：{"api_key_encrypted":"由提供方生成的加密字符串","base_url":"https://...","model":"模型名"}
+  · llm（大模型）：api_key、api_key_encrypted、base_url、model。api_key 与 api_key_encrypted 二选一；若不配置，程序不会调用大模型。密钥和地址、模型名请向接口提供方或管理员索取。
+  · mcp.servers（MCP 外部工具）：数组，每项代表一个 MCP 服务器。支持 stdio（本地进程）、streamable-http、sse 等连接方式。MCP 配置通常由技术人员填写；未配置时程序照常运行，仅不使用外部 MCP 工具。
 
-说明：api_key 与 api_key_encrypted 二选一即可；若两者都不配置，程序不会调用大模型。密钥和地址、模型名请向您的接口提供方或管理员索取。
-
-
-（2）MCP 外部工具配置：mcp_client_config.json
+（2）使用与注意
 ----------------------------------------
 
-作用：程序可连接外部 MCP 服务器（例如搜索、查询等工具），在调用大模型时使用这些工具辅助匹配。未配置时程序不连接任何外部 MCP 服务器。
-
-文件位置：config 文件夹内，文件名为 mcp_client_config.json（必须与此一致）。
-
-文件格式：JSON，包含一个名为 servers 的数组，数组中每项代表一个 MCP 服务器。支持的连接方式有三种，每种所需字段如下：
-
-  方式一 stdio（本地进程）：需填写 name、transport 为 "stdio"、command（启动命令）、args（命令参数，数组）。可选：env（环境变量，对象）、cwd（工作目录，字符串）。
-  方式二 streamable-http（网页接口）：需填写 name、transport 为 "streamable-http"、url（服务器地址）。
-  方式三 sse（网页 SSE）：需填写 name、transport 为 "sse"、url（服务器地址）。
-
-示例（仅作格式参考，实际使用时按需保留一种或多种，并替换为真实命令或地址）：
-
-  servers 数组中包含三个示例项，分别对应三种连接方式：
-  第一项 stdio：name 为 "示例-stdio（本地进程）"，transport 为 "stdio"，command 为 "npx"，args 为 ["-y","@modelcontextprotocol/server-echo"]，可选 env 为 {}，cwd 为 null。
-  第二项 streamable-http：name 为 "示例-streamable-http"，transport 为 "streamable-http"，url 为 "https://your-mcp-server.example.com/mcp"。
-  第三项 sse：name 为 "示例-sse"，transport 为 "sse"，url 为 "https://your-mcp-server.example.com/sse"。
-
-  完整 JSON 结构可参考程序 config 目录下的 mcp_client_config.json.example 文件（复制为 mcp_client_config.json 后按需修改）。
-
-说明：MCP 配置通常由提供程序给您的人员或技术人员填写；若您未收到该文件或说明，可不创建此文件，程序照常运行，仅不使用外部 MCP 工具。
-
-
-（3）使用与注意
-----------------------------------------
-
-  · 两个配置文件均为可选。不需要大模型或外部工具时，可不创建 config 文件夹，或只保留空文件夹。
-  · 文件名必须与上述完全一致（含英文大小写、扩展名 .json），否则程序无法识别。
+  · 配置文件为可选。不需要大模型或外部工具时，可不创建 config 文件夹或 app_config.yaml，程序使用默认值。
+  · 文件名必须为 app_config.yaml（含扩展名 .yaml），否则程序无法识别。
   · 修改配置后需重新启动程序后生效。
   · 配置文件内容涉及密钥或地址，请勿泄露给他人；建议不要将含有真实密钥的 config 文件夹随意外发。
 
@@ -207,7 +175,7 @@ config 文件夹放在与程序同一目录下。程序会在该文件夹中读�
 
 （4）程序运行期间请勿关闭黑色窗口（或终端窗口），否则会中断本次处理。
 
-（5）若您需要配置大模型或外部工具，请将 llm_config.json、mcp_client_config.json 放入 config 文件夹，格式与说明见上文“六、config 目录下配置文件说明”；具体取值可向提供程序的人员咨询。
+（5）若您需要配置大模型或外部工具，请在 config 文件夹中配置 app_config.yaml，格式与说明见上文“六、config 目录下配置文件说明”；具体取值可向提供程序的人员咨询。
 
 （6）本说明面向最终使用者，仅介绍如何操作程序。若您需要开发或二次打包，请参阅项目中的其他文档。
 

@@ -242,13 +242,13 @@ def _get_llm_call_params(rules: list[Any] | None) -> Any | None:
     cfg = get_llm_config()
     if not cfg.api_key:
         logger.warning(
-            "未配置大模型 API Key，跳过大模型调用（请配置 config/llm_config.json 或环境变量 OPENAI_API_KEY）"
+            "未配置大模型 API Key，跳过大模型调用（请配置 config/app_config.yaml 或环境变量 OPENAI_API_KEY）"
         )
         return None
     mcp_config = get_mcp_config()
     if not mcp_config:
         logger.warning(
-            "未找到 MCP 配置文件（mcp_client_config.json），大模型调用需要该文件；请将 mcp_client_config.json 放在 config 目录"
+            "未找到 MCP 配置（app_config.yaml 的 mcp.servers），大模型调用需要该配置；请在 config/app_config.yaml 中配置 mcp.servers"
         )
         return None
     from . import prompt as _prompt

@@ -3,15 +3,10 @@
 from __future__ import annotations
 
 import base64
-import json
 import logging
 import os
 
-from pydantic import ValidationError
-
 from models.schemas import LlmConfigResult, LlmConfigSchema
-
-from . import paths as _paths
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +71,7 @@ def _fernet_key_from_passphrase(passphrase: str) -> bytes:
 
 
 def encrypt_key(plain_key: str, passphrase: str = _KEY_PASSPHRASE) -> str:
-    """将明文 API Key 加密为 base64 字符串，可写入 llm_config.json。"""
+    """将明文 API Key 加密为 base64 字符串，可写入 app_config.yaml 的 llm.api_key_encrypted。"""
     from cryptography.fernet import Fernet
     f = Fernet(_fernet_key_from_passphrase(passphrase))
     return f.encrypt(plain_key.encode("utf-8")).decode("ascii")
@@ -95,20 +90,8 @@ def decrypt_key(encrypted_b64: str, passphrase: str = _KEY_PASSPHRASE) -> str | 
 def load_llm_config(schema: LlmConfigSchema | None = None) -> LlmConfigResult:
     """
     加载大模型配置：返回 LlmConfigResult(api_key, base_url, model)。
-    若传入 schema（来自 app_config.yaml 的 llm 节），则直接使用；否则由调用方从 loader 提供。
+    若传入 schema（来自 app_config.yaml 的 llm 节），则直接使用；否则使用默认配置。
     """
     if schema is not None:
         return build_llm_config_result(schema)
-    # 兼容：无统一配置时从旧版 llm_config.json 读
-    config_path = _paths.get_llm_config_path_raw()
-    if not config_path:
-        logger.warning("未找到 llm_config.json，使用默认 base_url/model")
-        return build_llm_config_result(LlmConfigSchema())
-    try:
-        raw = config_path.read_text(encoding="utf-8")
-        data = json.loads(raw)
-        cfg = LlmConfigSchema.model_validate(data)
-    except (ValidationError, json.JSONDecodeError) as e:
-        logger.warning("读取或解析 llm_config.json 失败: %s", e)
-        cfg = LlmConfigSchema()
-    return build_llm_config_result(cfg)
+    return build_llm_config_result(LlmConfigSchema())

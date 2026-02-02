@@ -124,7 +124,7 @@ class MatchResult(BaseModel):
 
 
 class LlmConfigSchema(BaseModel):
-    """llm_config.json 结构；用于 model_validate 解析。"""
+    """app_config.yaml 中 llm 节结构；用于 model_validate 解析。"""
 
     api_key: str = Field(default="", description="明文 API Key")
     api_key_encrypted: str = Field(default="", description="加密后的 API Key")
@@ -172,7 +172,7 @@ class McpServerSchema(BaseModel):
 
 
 class McpConfigSchema(BaseModel):
-    """mcp_client_config.json 根结构。"""
+    """app_config.yaml 中 mcp 节结构。"""
 
     servers: list[McpServerSchema] = Field(default_factory=list, description="MCP 服务器列表")
 

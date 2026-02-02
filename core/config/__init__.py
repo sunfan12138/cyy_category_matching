@@ -1,7 +1,7 @@
 """
 core.config：整合路径、统一 YAML 配置 app_config.yaml 及加载。
 
-- 配置：config/app_config.yaml（含 llm、mcp、matching、app、embedding、llm_client、prompt）；兼容旧版 llm_config.json、mcp_client_config.json。
+- 配置：config/app_config.yaml（含 llm、mcp、matching、app、embedding、llm_client、prompt）。
 - 路径：config 目录及 model/excel/output/logs（见 .paths）
 - 统一加载：load_app_config() 启动时调用一次，get_* 返回已缓存配置。
 """
@@ -59,7 +59,7 @@ _app_config: AppConfigSchema | None = None
 
 
 def load_app_config() -> None:
-    """加载全部配置：优先 app_config.yaml，兼容旧版 llm_config.json / mcp_client_config.json。"""
+    """加载全部配置：从 config/app_config.yaml 读取并缓存。"""
     global _loaded, _config_dir, _llm_config_path, _mcp_config_path, _llm_config, _mcp_config, _app_config
 
     if _loaded:
@@ -96,17 +96,19 @@ def get_config_dir() -> Path:
     return _config_dir
 
 
-def get_llm_config_path() -> Path | None:
-    """大模型配置文件路径；未加载时先触发 load_app_config()。"""
+def get_llm_config_path() -> Path:
+    """大模型配置文件路径（app_config.yaml）；未加载时先触发 load_app_config()。"""
     if not _loaded:
         load_app_config()
+    assert _llm_config_path is not None
     return _llm_config_path
 
 
-def get_mcp_config_path() -> Path | None:
-    """MCP 客户端配置文件路径；未加载时先触发 load_app_config()。"""
+def get_mcp_config_path() -> Path:
+    """MCP 客户端配置文件路径（app_config.yaml）；未加载时先触发 load_app_config()。"""
     if not _loaded:
         load_app_config()
+    assert _mcp_config_path is not None
     return _mcp_config_path
 
 
