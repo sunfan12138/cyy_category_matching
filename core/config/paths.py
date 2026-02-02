@@ -20,8 +20,6 @@ def _exe_dir() -> Path:
 
 def get_base_dir() -> Path:
     """基准目录：打包后为 exe 所在目录，否则为项目根（core 的父目录）。"""
-    if os.environ.get("CATEGORY_MATCHING_BASE_DIR"):
-        return Path(os.environ["CATEGORY_MATCHING_BASE_DIR"]).resolve()
     if getattr(sys, "frozen", False):
         return _exe_dir()
     return Path(__file__).resolve().parent.parent.parent
@@ -50,29 +48,21 @@ def get_mcp_config_path_raw() -> Path:
 
 def get_model_dir() -> Path:
     """BGE 模型目录。"""
-    if os.environ.get("CATEGORY_MATCHING_MODEL_DIR"):
-        return Path(os.environ["CATEGORY_MATCHING_MODEL_DIR"]).resolve()
     return get_base_dir() / "model"
 
 
 def get_excel_dir() -> Path:
     """规则与已校验品牌 Excel 目录。"""
-    if os.environ.get("CATEGORY_MATCHING_EXCEL_DIR"):
-        return Path(os.environ["CATEGORY_MATCHING_EXCEL_DIR"]).resolve()
     return get_base_dir() / "excel"
 
 
 def get_output_dir() -> Path:
     """匹配结果输出目录。"""
-    if os.environ.get("CATEGORY_MATCHING_OUTPUT_DIR"):
-        return Path(os.environ["CATEGORY_MATCHING_OUTPUT_DIR"]).resolve()
     return get_base_dir() / "output"
 
 
 def get_log_dir() -> Path:
     """日志文件目录。"""
-    if os.environ.get("CATEGORY_MATCHING_LOG_DIR"):
-        return Path(os.environ["CATEGORY_MATCHING_LOG_DIR"]).resolve()
     return get_base_dir() / "logs"
 
 

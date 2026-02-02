@@ -83,7 +83,7 @@ uv run main.py 待匹配品类.txt
 ### 4.1 输入文件说明（Excel / 品类文件）
 
 - **规则与已校验品牌（Excel）**  
-  放在 `excel/` 目录（或通过环境变量 `CATEGORY_MATCHING_EXCEL_DIR` 指定）：
+  放在 `excel/` 目录：
   - **原子品类关键词.xlsx**：规则表，用于关键词规则匹配。
   - **校验过的品牌对应原子品类.xlsx**：已校验品牌表，用于相似度匹配与向量计算。
 - **待匹配品类文件**  
@@ -91,7 +91,7 @@ uv run main.py 待匹配品类.txt
 
 ### 4.2 输出文件说明
 
-- **匹配结果 Excel**：保存在 `output/`（或 `CATEGORY_MATCHING_OUTPUT_DIR` 指定目录），文件名形如 `源文件名_匹配结果_时间戳.xlsx` 或 `匹配结果_时间戳.xlsx`。
+- **匹配结果 Excel**：保存在 `output/`，文件名形如 `源文件名_匹配结果_时间戳.xlsx` 或 `匹配结果_时间戳.xlsx`。
 - **列含义**：输入品类、一级原子品类、品类编码、原子品类、匹配方式（规则/相似度/搜索后匹配等）、相似度匹配结果、大模型描述。
 - **日志**：写入 `logs/` 目录，按日期命名 `category_matching_YYYYMMDD.log`。
 
@@ -113,7 +113,7 @@ uv run main.py 待匹配品类.txt --no-loop
 
 - **Windows**：运行 `dist/CategoryMatching.exe`（OneFile 单文件）或 `dist/CategoryMatching/CategoryMatching.exe`（onedir）。
 - **macOS / Linux**：运行 `dist/CategoryMatching/CategoryMatching`。
-- 将 `excel`、`model`、`output` 文件夹放在**与可执行文件同一目录**（或通过环境变量指定），双击或在终端运行即可。
+- 将 `excel`、`model`、`output` 文件夹放在**与可执行文件同一目录**，双击或在终端运行即可。
 
 ### 4.4 配置文件说明（app_config.yaml）
 
@@ -142,15 +142,7 @@ uv run main.py D:/data/品类列表.txt
 uv run main.py D:/data/品类列表.txt --no-loop
 ```
 
-**环境变量（可选）**：可覆盖默认目录，便于多环境或打包后自定义路径。
-
-| 变量 | 含义 |
-|------|------|
-| `CATEGORY_MATCHING_BASE_DIR` | 基准目录（默认：源码为项目根，打包后为 exe 所在目录） |
-| `CATEGORY_MATCHING_EXCEL_DIR` | 规则/已校验品牌 Excel 目录 |
-| `CATEGORY_MATCHING_OUTPUT_DIR` | 匹配结果输出目录 |
-| `CATEGORY_MATCHING_MODEL_DIR` | BGE 模型目录 |
-| `CATEGORY_MATCHING_LOG_DIR` | 日志目录 |
+基准目录：源码运行为项目根，打包后为 exe 所在目录；excel、model、output、logs、config 均为基准目录下同名子目录。
 
 ---
 
@@ -245,15 +237,15 @@ $env:BUILD_TARGET="onefile"; uv run python scripts/build.py
   在 `build.spec` / `build-onefile.spec` 的 `hiddenimports` 中补充缺失模块，再执行 `uv run pyinstaller --clean <spec>` 或 `uv run python scripts/build.py`。
 
 - **打包后运行报错**  
-  确认 `excel`、`model`、`output` 与可执行文件同目录（或通过环境变量指定），且所需 Excel 文件名与默认一致（或后续扩展支持自定义）。
+  确认 `excel`、`model`、`output` 与可执行文件同目录，且所需 Excel 文件名与默认一致（或后续扩展支持自定义）。
 
 ### 运行无输出等情况
 
 - **“加载数据失败”**  
-  检查 `excel/` 下是否存在 `原子品类关键词.xlsx` 与 `校验过的品牌对应原子品类.xlsx`，或通过 `CATEGORY_MATCHING_EXCEL_DIR` 指定正确目录。
+  检查 `excel/` 下是否存在 `原子品类关键词.xlsx` 与 `校验过的品牌对应原子品类.xlsx`。
 
 - **结果 Excel 未生成**  
-  查看 `output/`（或 `CATEGORY_MATCHING_OUTPUT_DIR`）是否有写入权限；查看 `logs/` 下当日日志是否有异常。
+  查看 `output/` 是否有写入权限；查看 `logs/` 下当日日志是否有异常。
 
 - **Windows 下 “Failed to load Python DLL” / LoadLibrary 报错**  
   1）将整个程序目录移到**纯英文路径**（如 `C:\CategoryMatching`）；  
