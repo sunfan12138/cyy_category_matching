@@ -1,9 +1,0 @@
-{
-  "servers": [
-    {
-      "name": "bing-cn-mcp-server",
-      "transport": "sse",
-      "url": "https://mcp.api-inference.modelscope.net/55415b98a9b140/sse"
-    }
-  ]
-}
