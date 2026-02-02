@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Callable
 
+from models.schemas import SimilarityMatchResult
+
 from .models import CategoryRule, VerifiedBrand
 
 
@@ -85,14 +87,14 @@ def match_by_similarity(
     store_text: str,
     verified_brands: list[VerifiedBrand],
     threshold: float = 0.97,
-) -> tuple[list[CategoryRule], VerifiedBrand | None, float]:
+) -> SimilarityMatchResult:
     """
     与已校验品牌做相似度比对，取相似度最高的品牌；若最高分 >= threshold 则返回其原子品类（单条规则）。
-    返回 (匹配规则列表, 命中的品牌, 相似度)；无匹配时为 ([], None, 0.0)。
+    返回 SimilarityMatchResult(rules, brand, score)；无匹配时为 rules=[], brand=None, score=0.0。
     """
     store_text = store_text.strip()
     if not store_text or not verified_brands:
-        return [], None, 0.0
+        return SimilarityMatchResult(rules=[], brand=None, score=0.0)
 
     def skip_empty_brand(i: int) -> bool:
         return not (verified_brands[i].brand_name)
@@ -106,7 +108,7 @@ def match_by_similarity(
         scores = [text_similarity(store_text, vb.brand_name) for vb in verified_brands]
         best = _argmax_with_threshold(scores, threshold, skip_indices=skip_empty_brand)
     if best is None:
-        return [], None, 0.0
+        return SimilarityMatchResult(rules=[], brand=None, score=0.0)
     best_idx, best_score = best
     best_brand = verified_brands[best_idx]
     rule = CategoryRule(
@@ -114,4 +116,4 @@ def match_by_similarity(
         category_code="",
         atomic_category=best_brand.atomic_category,
     )
-    return [rule], best_brand, best_score
+    return SimilarityMatchResult(rules=[rule], brand=best_brand, score=best_score)

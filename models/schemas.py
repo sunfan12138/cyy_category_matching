@@ -175,3 +175,66 @@ class McpConfigSchema(BaseModel):
     """mcp_client_config.json 根结构。"""
 
     servers: list[McpServerSchema] = Field(default_factory=list, description="MCP 服务器列表")
+
+
+# ----- 运行时配置/结果（替代 tuple/dict） -----
+
+
+class LlmConfigResult(BaseModel):
+    """大模型配置加载结果：(api_key, base_url, model)。"""
+
+    api_key: str | None = Field(default=None, description="API Key，未配置时为 None")
+    base_url: str = Field(default="", description="API base URL")
+    model: str = Field(default="", description="模型名")
+
+    @classmethod
+    def from_tuple(cls, t: tuple[str | None, str, str]) -> LlmConfigResult:
+        return cls(api_key=t[0], base_url=t[1] or "", model=t[2] or "")
+
+    def to_tuple(self) -> tuple[str | None, str, str]:
+        return (self.api_key, self.base_url, self.model)
+
+
+class ConfigDisplay(BaseModel):
+    """用于界面/日志的配置展示：base_url、model、key 脱敏。"""
+
+    base_url: str = Field(default="", description="API base URL")
+    model: str = Field(default="", description="模型名")
+    api_key_masked: str = Field(default="", description="脱敏后的 Key")
+    configured: str = Field(default="否", description="是否已配置（是/否）")
+
+
+class LlmCallParams(BaseModel):
+    """LLM+MCP 调用参数：供 llm/client 使用，替代 7-tuple。"""
+
+    api_key: str = Field(description="API Key")
+    base_url: str = Field(description="API base URL")
+    model: str = Field(description="模型名")
+    mcp_config: list[Any] = Field(default_factory=list, description="MCP 服务器配置列表")
+    prompt_base: str = Field(default="", description="系统提示词基础")
+    prompt_tools: str = Field(default="", description="工具说明提示词")
+    reference_keywords: str = Field(default="", description="参考关键词")
+
+    model_config = {"arbitrary_types_allowed": True}
+
+
+class SimilarityMatchResult(BaseModel):
+    """相似度匹配结果：(rules, brand, score)。"""
+
+    rules: list[Any] = Field(default_factory=list, description="匹配到的规则列表，运行时为 list[CategoryRule]")
+    brand: Any = Field(default=None, description="命中的品牌，运行时为 VerifiedBrand | None")
+    score: float = Field(default=0.0, ge=0.0, le=1.0, description="相似度得分")
+
+    model_config = {"arbitrary_types_allowed": True}
+
+
+class MatchStoreResult(BaseModel):
+    """单条匹配结果：(matched_rules, from_similarity, ref_brand, score, llm_desc)。"""
+
+    matched_rules: list[Any] = Field(default_factory=list, description="匹配到的规则，运行时为 list[CategoryRule]")
+    from_similarity: bool = Field(default=False, description="是否由相似度匹配")
+    ref_brand: Any = Field(default=None, description="命中的品牌，运行时为 VerifiedBrand | None")
+    score: float = Field(default=0.0, ge=0.0, le=1.0, description="相似度得分")
+    llm_desc: str | None = Field(default=None, description="大模型描述，可选")
+
+    model_config = {"arbitrary_types_allowed": True}

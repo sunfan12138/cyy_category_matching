@@ -9,8 +9,11 @@ import pytest
 from models.schemas import (
     CategoryConfig,
     CategoryNode,
+    LlmConfigResult,
     MatchResult,
+    MatchStoreResult,
     RunConfigSchema,
+    SimilarityMatchResult,
 )
 
 
@@ -69,3 +72,37 @@ class TestRunConfigSchema:
         )
         assert config.rules_path == Path("/tmp/excel/原子品类关键词.xlsx")
         assert config.verified_path == Path("/tmp/excel/校验过的品牌对应原子品类.xlsx")
+
+
+class TestLlmConfigResult:
+    def test_to_tuple(self) -> None:
+        r = LlmConfigResult(api_key="sk-x", base_url="https://api.example.com", model="gpt-4")
+        t = r.to_tuple()
+        assert t[0] == "sk-x"
+        assert t[1] == "https://api.example.com"
+        assert t[2] == "gpt-4"
+
+    def test_from_tuple(self) -> None:
+        t = ("key", "https://a.com", "model")
+        r = LlmConfigResult.from_tuple(t)
+        assert r.api_key == "key"
+        assert r.base_url == "https://a.com"
+        assert r.model == "model"
+
+
+class TestSimilarityMatchResult:
+    def test_defaults(self) -> None:
+        r = SimilarityMatchResult()
+        assert r.rules == []
+        assert r.brand is None
+        assert r.score == 0.0
+
+
+class TestMatchStoreResult:
+    def test_defaults(self) -> None:
+        r = MatchStoreResult()
+        assert r.matched_rules == []
+        assert r.from_similarity is False
+        assert r.ref_brand is None
+        assert r.score == 0.0
+        assert r.llm_desc is None

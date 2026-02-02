@@ -231,12 +231,14 @@ async def _call_llm_with_mcp_async(
     return None
 
 
-def _get_llm_call_params(rules: list[Any] | None) -> tuple[str, str, str, list[Any], str, str, str] | None:
-    """获取 LLM+MCP 调用参数；未配置时打 warning 并返回 None。"""
+def _get_llm_call_params(rules: list[Any] | None) -> Any | None:
+    """获取 LLM+MCP 调用参数；未配置时打 warning 并返回 None。返回 LlmCallParams。"""
+    from models.schemas import LlmCallParams
+
     from core.config import get_llm_config, get_mcp_config
 
-    api_key, base_url, model = get_llm_config()
-    if not api_key:
+    cfg = get_llm_config()
+    if not cfg.api_key:
         logger.warning(
             "未配置大模型 API Key，跳过大模型调用（请配置 config/llm_config.json 或环境变量 OPENAI_API_KEY）"
         )
@@ -248,10 +250,15 @@ def _get_llm_call_params(rules: list[Any] | None) -> tuple[str, str, str, list[A
         )
         return None
     from . import prompt as _prompt
-    prompt_base = _prompt.PROMPT_BASE
-    prompt_tools = _prompt.PROMPT_TOOLS
-    reference_keywords = _prompt.build_keyword_hint(rules) if rules else ""
-    return (api_key, base_url, model, mcp_config, prompt_base, prompt_tools, reference_keywords)
+    return LlmCallParams(
+        api_key=cfg.api_key,
+        base_url=cfg.base_url,
+        model=cfg.model,
+        mcp_config=mcp_config,
+        prompt_base=_prompt.PROMPT_BASE,
+        prompt_tools=_prompt.PROMPT_TOOLS,
+        reference_keywords=_prompt.build_keyword_hint(rules) if rules else "",
+    )
 
 
 def get_category_description_with_search(
@@ -268,12 +275,17 @@ def get_category_description_with_search(
     params = _get_llm_call_params(rules)
     if params is None:
         return None
-    api_key, base_url, model, mcp_config, prompt_base, prompt_tools, ref_kw = params
     try:
         return asyncio.run(
             _call_llm_with_mcp_async(
-                category_text, api_key, base_url, model,
-                mcp_config, prompt_base, prompt_tools, ref_kw,
+                category_text,
+                params.api_key,
+                params.base_url,
+                params.model,
+                params.mcp_config,
+                params.prompt_base,
+                params.prompt_tools,
+                params.reference_keywords,
                 context=context,
             )
         )
@@ -302,11 +314,16 @@ async def get_category_description_with_search_async(
     params = _get_llm_call_params(rules)
     if params is None:
         return None
-    api_key, base_url, model, mcp_config, prompt_base, prompt_tools, ref_kw = params
     try:
         return await _call_llm_with_mcp_async(
-            category_text, api_key, base_url, model,
-            mcp_config, prompt_base, prompt_tools, ref_kw,
+            category_text,
+            params.api_key,
+            params.base_url,
+            params.model,
+            params.mcp_config,
+            params.prompt_base,
+            params.prompt_tools,
+            params.reference_keywords,
             context=context,
         )
     except Exception as e:

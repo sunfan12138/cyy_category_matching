@@ -9,7 +9,7 @@ import os
 
 from pydantic import ValidationError
 
-from models.schemas import LlmConfigSchema
+from models.schemas import LlmConfigResult, LlmConfigSchema
 
 from . import paths as _paths
 
@@ -65,9 +65,9 @@ def decrypt_key(encrypted_b64: str, passphrase: str = _KEY_PASSPHRASE) -> str | 
         return None
 
 
-def load_llm_config() -> tuple[str | None, str, str]:
+def load_llm_config() -> LlmConfigResult:
     """
-    加载大模型配置：(api_key, base_url, model)。
+    加载大模型配置：返回 LlmConfigResult(api_key, base_url, model)。
     key 优先从 llm_config.json（明文或 api_key_encrypted），否则环境变量 OPENAI_API_KEY。
     """
     base_url = _DEFAULT_URL
@@ -109,4 +109,4 @@ def load_llm_config() -> tuple[str | None, str, str]:
 
     base_url = base_url.rstrip("/") if base_url else _DEFAULT_URL
     model = model or _DEFAULT_MODEL
-    return (api_key, base_url, model)
+    return LlmConfigResult(api_key=api_key, base_url=base_url, model=model)

@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from models.schemas import ConfigDisplay, LlmConfigResult
+
 from . import llm as _llm
 from . import mcp as _mcp
 from . import paths as _paths
@@ -50,7 +52,7 @@ _loaded = False
 _config_dir: Path | None = None
 _llm_config_path: Path | None = None
 _mcp_config_path: Path | None = None
-_llm_config: tuple[str | None, str, str] | None = None
+_llm_config: LlmConfigResult | None = None
 _mcp_config: list[Any] | None = None
 
 
@@ -105,8 +107,8 @@ def get_mcp_config_path() -> Path | None:
     return _mcp_config_path
 
 
-def get_llm_config() -> tuple[str | None, str, str]:
-    """大模型配置 (api_key, base_url, model)；未加载时先触发 load_app_config()。"""
+def get_llm_config() -> LlmConfigResult:
+    """大模型配置 LlmConfigResult(api_key, base_url, model)；未加载时先触发 load_app_config()。"""
     if not _loaded:
         load_app_config()
     assert _llm_config is not None
@@ -123,13 +125,14 @@ def get_mcp_config() -> list[Any]:
 
 def get_config_display() -> dict[str, str]:
     """用于界面/日志的配置展示：base_url、model、key 脱敏。"""
-    api_key, base_url, model = get_llm_config()
-    return {
-        "base_url": base_url,
-        "model": model,
-        "api_key_masked": mask_key(api_key),
-        "configured": "是" if api_key else "否",
-    }
+    cfg = get_llm_config()
+    display = ConfigDisplay(
+        base_url=cfg.base_url,
+        model=cfg.model,
+        api_key_masked=mask_key(cfg.api_key),
+        configured="是" if cfg.api_key else "否",
+    )
+    return display.model_dump()
 
 
 # ----- CLI：加密 key -----
