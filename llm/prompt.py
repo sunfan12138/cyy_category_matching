@@ -60,12 +60,18 @@ PROMPT_TOOLS = """
 **调用方式**：发起一次工具调用，把用户原文或需查的内容作为查询参数传入；收到返回后，从返回内容中提炼品类词，**尽可能多写**，**至少 15～20 个相关词**（同义、近义、上下游、相关业态、常见叫法均可），按「多个词用顿号/逗号连接」的格式输出，尽量使用上文给出的参考词汇，宁可多写不要少写，以提高规则匹配成功率。若搜索仍无结果，直接返回「未匹配到结果」。
 """
 
-# 只取少量关键词示例（个数与总字数都限制）
-MAX_KEYWORD_EXAMPLES = 10
-MAX_KEYWORD_HINT_CHARS = 120
+
+def _prompt_config():
+    """提示词配置（来自 app_config.yaml prompt 节）；需已调用 load_app_config()。"""
+    from core.config import get_app_config
+    return get_app_config().prompt
+
 
 def build_keyword_hint(rules: list[CategoryRule]) -> str:
     """从规则中抽取少量关键词示例，用于提示词。"""
+    cfg = _prompt_config()
+    max_examples = cfg.max_keyword_examples
+    max_chars = cfg.max_keyword_hint_chars
     seen: set[str] = set()
     words: list[str] = []
     for r in rules:
@@ -77,15 +83,15 @@ def build_keyword_hint(rules: list[CategoryRule]) -> str:
                 if kw and kw.strip() and kw.strip() not in seen:
                     seen.add(kw.strip())
                     words.append(kw.strip())
-                if len(words) >= MAX_KEYWORD_EXAMPLES:
+                if len(words) >= max_examples:
                     break
-            if len(words) >= MAX_KEYWORD_EXAMPLES:
+            if len(words) >= max_examples:
                 break
-        if len(words) >= MAX_KEYWORD_EXAMPLES:
+        if len(words) >= max_examples:
             break
     if not words:
         return ""
-    s = "、".join(words[:MAX_KEYWORD_EXAMPLES])
-    if len(s) > MAX_KEYWORD_HINT_CHARS:
-        s = s[:MAX_KEYWORD_HINT_CHARS].rsplit("、", 1)[0] if "、" in s[:MAX_KEYWORD_HINT_CHARS] else s[:MAX_KEYWORD_HINT_CHARS]
+    s = "、".join(words[:max_examples])
+    if len(s) > max_chars:
+        s = s[:max_chars].rsplit("、", 1)[0] if "、" in s[:max_chars] else s[:max_chars]
     return s

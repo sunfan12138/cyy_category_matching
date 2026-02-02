@@ -1,31 +1,43 @@
 """Pydantic 模型与 Schema：配置、类目、匹配结果。"""
 
 from .schemas import (
+    AppConfigSchema,
+    AppSection,
     CategoryConfig,
     CategoryNode,
     ConfigDisplay,
+    EmbeddingSection,
     LlmConfigResult,
     LlmConfigSchema,
     LlmCallParams,
+    LlmClientSection,
     MatchResult,
     MatchStoreResult,
+    MatchingSection,
     McpConfigSchema,
     McpServerSchema,
+    PromptSection,
     RunConfigSchema,
     SimilarityMatchResult,
 )
 
 __all__ = [
+    "AppConfigSchema",
+    "AppSection",
     "CategoryConfig",
     "CategoryNode",
     "ConfigDisplay",
+    "EmbeddingSection",
     "LlmConfigResult",
     "LlmConfigSchema",
     "LlmCallParams",
+    "LlmClientSection",
     "MatchResult",
     "MatchStoreResult",
+    "MatchingSection",
     "McpConfigSchema",
     "McpServerSchema",
+    "PromptSection",
     "RunConfigSchema",
     "SimilarityMatchResult",
 ]

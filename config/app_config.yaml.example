@@ -1,0 +1,54 @@
+# 品类匹配统一配置文件示例
+# 复制为 app_config.yaml 后按需修改；未填项使用下方默认值。
+
+# 大模型：API Key 可留空，使用 api_key_encrypted 或环境变量 OPENAI_API_KEY
+llm:
+  api_key: ""
+  api_key_encrypted: ""
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  model: "qwen-plus"
+
+# MCP 服务器：大模型调用工具（如搜索）时使用
+mcp:
+  servers:
+    - name: "示例-stdio"
+      transport: "stdio"
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-echo"]
+      env: {}
+      cwd: null
+    # - name: "示例-http"
+    #   transport: "streamable-http"
+    #   url: "https://your-mcp-server.example.com/mcp"
+
+# 匹配：相似度阈值、LLM 回退、并发数
+matching:
+  similarity_threshold: 0
+  llm_fallback_threshold: 0.9
+  batch_max_workers: 8
+  llm_unmatched_marker: "未匹配到结果"
+  llm_unmatched_aliases: ["未匹配到结果", "未匹配到"]
+
+# 应用：规则/品牌 Excel 文件名、输入文件名忽略
+app:
+  rules_filename: "原子品类关键词.xlsx"
+  verified_filename: "校验过的品牌对应原子品类.xlsx"
+  input_stem_ignore: "新建文本文档"
+
+# 向量模型：BGE 模型与相似度权重
+embedding:
+  bge_model_id: "BAAI/bge-small-zh-v1.5"
+  bge_weight: 0.5
+  fill_embedding_chunk: 16000
+  encode_batch_size: 512
+
+# LLM 客户端：单次 token、日志摘要长度
+llm_client:
+  max_tokens: 768
+  log_input_summary_len: 80
+  log_result_summary_len: 120
+
+# 提示词：参考关键词条数与字数
+prompt:
+  max_keyword_examples: 10
+  max_keyword_hint_chars: 120

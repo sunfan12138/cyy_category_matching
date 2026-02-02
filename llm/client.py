@@ -14,16 +14,17 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# 单次调用最大 token
-MAX_TOKENS = 768
 
-# 日志用摘要最大长度（避免 prompt/结果全文打日志）
-LOG_INPUT_SUMMARY_LEN = 80
-LOG_RESULT_SUMMARY_LEN = 120
+def _llm_client_config():
+    """LLM 客户端配置（来自 app_config.yaml llm_client 节）；需已调用 load_app_config()。"""
+    from core.config import get_app_config
+    return get_app_config().llm_client
 
 
-def _summary(text: str, max_len: int = LOG_INPUT_SUMMARY_LEN) -> str:
+def _summary(text: str, max_len: int | None = None) -> str:
     """对长文本做摘要，用于日志，避免输出全文。"""
+    if max_len is None:
+        max_len = _llm_client_config().log_input_summary_len
     s = (text or "").strip()
     if len(s) <= max_len:
         return s
@@ -61,16 +62,17 @@ async def _call_llm_with_mcp_async(
 
     ctx = context or {}
     ctx_str = ",".join(f"{k}={v}" for k, v in sorted(ctx.items()) if v is not None)
-    input_summary = _summary(category_text, LOG_INPUT_SUMMARY_LEN)
+    input_summary = _summary(category_text)
     base_url_masked = _mask_base_url(base_url)
 
+    max_tokens = _llm_client_config().max_tokens
     logger.info(
         "[LLM] 开始调用 | context={%s} | input_summary=%s | model=%s | base_url=%s | max_tokens=%s",
         ctx_str or "无",
         input_summary,
         model,
         base_url_masked,
-        MAX_TOKENS,
+        max_tokens,
     )
     start_time = time.perf_counter()
 
@@ -119,7 +121,7 @@ async def _call_llm_with_mcp_async(
                 model=model,
                 messages=messages_with_system,
                 tools=tools if tools else None,
-                max_tokens=MAX_TOKENS,
+                max_tokens=_llm_client_config().max_tokens,
             )
         except Exception as e:
             elapsed = time.perf_counter() - start_time
@@ -147,11 +149,11 @@ async def _call_llm_with_mcp_async(
             result = (msg.content or "").strip()
             elapsed = time.perf_counter() - start_time
             logger.info(
-                "[LLM] 返回成功 | round=%s | context={%s} | result_len=%s | result_summary=%s | elapsed=%.2fs",
+                "[LLM] 返回成功 | round=%s | context={%s} |             result_len=%s | result_summary=%s | elapsed=%.2fs",
                 round_no,
                 ctx_str or "无",
                 len(result),
-                _summary(result, LOG_RESULT_SUMMARY_LEN),
+                _summary(result, _llm_client_config().log_result_summary_len),
                 elapsed,
             )
             return result

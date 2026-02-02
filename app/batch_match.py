@@ -17,15 +17,11 @@ from .file_io import ResultRow
 
 logger = logging.getLogger(__name__)
 
-# 批量匹配时的并发数（asyncio 同时跑多少条），用于加速大模型等 I/O
-BATCH_MAX_WORKERS = 8
 
-SIMILARITY_THRESHOLD = 0
-# 相似度低于此值时，用大模型生成品类描述并再次做关键词规则匹配
-LLM_FALLBACK_SIMILARITY_THRESHOLD = 0.9
-# 大模型明确返回「未匹配到结果」或「未匹配到」时，匹配方式记为「未搜索到」并标红
-LLM_UNMATCHED_MARKER = "未匹配到结果"
-LLM_UNMATCHED_ALIASES = ("未匹配到结果", "未匹配到")
+def _matching_config():
+    """匹配配置（来自 app_config.yaml matching 节）；需已调用 load_app_config()。"""
+    from core.config import get_app_config
+    return get_app_config().matching
 
 
 def match_store_categories(
@@ -39,6 +35,7 @@ def match_store_categories(
     （可调用搜索等工具），根据描述做关键词规则匹配；若规则命中则按规则结果返回（记为「搜索后匹配」）。
     返回 MatchStoreResult(matched_rules, from_similarity, ref_brand, score, llm_desc)。
     """
+    mc = _matching_config()
     store_text = store_text.strip()
     matched = match_store(store_text, rules)
     if matched:
@@ -47,38 +44,38 @@ def match_store_categories(
         logger.debug("未进入 LLM/MCP：无已校验品牌")
         return MatchStoreResult(matched_rules=[], from_similarity=False, score=0.0)
     sim_result = match_by_similarity(
-        store_text, verified_brands, threshold=SIMILARITY_THRESHOLD
+        store_text, verified_brands, threshold=mc.similarity_threshold
     )
     if not sim_result.rules or sim_result.brand is None:
         logger.info("未进入 LLM/MCP [%s]：无相似度匹配（与已校验品牌均不相似）", store_text[:40])
         return MatchStoreResult(matched_rules=[], from_similarity=False, score=0.0)
-    if sim_result.score >= LLM_FALLBACK_SIMILARITY_THRESHOLD:
-        logger.info("未进入 LLM/MCP [%s]：相似度 %.2f >= 0.9，直接采用相似度结果", store_text[:40], sim_result.score)
+    if sim_result.score >= mc.llm_fallback_threshold:
+        logger.info("未进入 LLM/MCP [%s]：相似度 %.2f >= %.2f，直接采用相似度结果", store_text[:40], sim_result.score, mc.llm_fallback_threshold)
         return MatchStoreResult(
             matched_rules=sim_result.rules,
             from_similarity=True,
             ref_brand=sim_result.brand,
             score=sim_result.score,
         )
-    # 相似度 < 0.9 时，调用大模型（带 MCP 工具），再对描述做规则匹配
-    logger.info("开始调用大模型 [%s]：相似度 < 0.9", store_text[:40])
+    # 相似度低于阈值时，调用大模型（带 MCP 工具），再对描述做规则匹配
+    logger.info("开始调用大模型 [%s]：相似度 < %.2f", store_text[:40], mc.llm_fallback_threshold)
     desc = get_category_description_with_search(
         store_text,
         rules=rules,
         context={
-            "similarity_threshold": LLM_FALLBACK_SIMILARITY_THRESHOLD,
+            "similarity_threshold": mc.llm_fallback_threshold,
             "similarity_score": round(sim_result.score, 4),
             "item": store_text[:50] + ("..." if len(store_text) > 50 else ""),
         },
     )
     if desc:
-        if desc.strip() in LLM_UNMATCHED_ALIASES:
+        if desc.strip() in mc.llm_unmatched_aliases:
             return MatchStoreResult(
                 matched_rules=sim_result.rules,
                 from_similarity=True,
                 ref_brand=sim_result.brand,
                 score=sim_result.score,
-                llm_desc=LLM_UNMATCHED_MARKER,
+                llm_desc=mc.llm_unmatched_marker,
             )
         rule_matched = match_store(desc.strip(), rules)
         if rule_matched:
@@ -110,41 +107,42 @@ async def match_store_categories_async(
     matched = match_store(store_text, rules)
     if matched:
         return MatchStoreResult(matched_rules=matched, from_similarity=False, score=0.0)
+    mc = _matching_config()
     if not verified_brands:
         logger.debug("未进入 LLM/MCP：无已校验品牌")
         return MatchStoreResult(matched_rules=[], from_similarity=False, score=0.0)
     sim_result = match_by_similarity(
-        store_text, verified_brands, threshold=SIMILARITY_THRESHOLD
+        store_text, verified_brands, threshold=mc.similarity_threshold
     )
     if not sim_result.rules or sim_result.brand is None:
         logger.info("未进入 LLM/MCP [%s]：无相似度匹配（与已校验品牌均不相似）", store_text[:40])
         return MatchStoreResult(matched_rules=[], from_similarity=False, score=0.0)
-    if sim_result.score >= LLM_FALLBACK_SIMILARITY_THRESHOLD:
-        logger.info("未进入 LLM/MCP [%s]：相似度 %.2f >= 0.9，直接采用相似度结果", store_text[:40], sim_result.score)
+    if sim_result.score >= mc.llm_fallback_threshold:
+        logger.info("未进入 LLM/MCP [%s]：相似度 %.2f >= %.2f，直接采用相似度结果", store_text[:40], sim_result.score, mc.llm_fallback_threshold)
         return MatchStoreResult(
             matched_rules=sim_result.rules,
             from_similarity=True,
             ref_brand=sim_result.brand,
             score=sim_result.score,
         )
-    logger.info("开始调用大模型 [%s]：相似度 < 0.9", store_text[:40])
+    logger.info("开始调用大模型 [%s]：相似度 < %.2f", store_text[:40], mc.llm_fallback_threshold)
     desc = await get_category_description_with_search_async(
         store_text,
         rules=rules,
         context={
-            "similarity_threshold": LLM_FALLBACK_SIMILARITY_THRESHOLD,
+            "similarity_threshold": mc.llm_fallback_threshold,
             "similarity_score": round(sim_result.score, 4),
             "item": store_text[:50] + ("..." if len(store_text) > 50 else ""),
         },
     )
     if desc:
-        if desc.strip() in LLM_UNMATCHED_ALIASES:
+        if desc.strip() in mc.llm_unmatched_aliases:
             return MatchStoreResult(
                 matched_rules=sim_result.rules,
                 from_similarity=True,
                 ref_brand=sim_result.brand,
                 score=sim_result.score,
-                llm_desc=LLM_UNMATCHED_MARKER,
+                llm_desc=mc.llm_unmatched_marker,
             )
         rule_matched = match_store(desc.strip(), rules)
         if rule_matched:
@@ -167,11 +165,12 @@ async def match_store_categories_async(
 def _build_result_row(name: str, out: MatchStoreResult) -> ResultRow:
     """根据单条匹配结果 MatchStoreResult 构建 MatchResult 并转为 7 列 ResultRow。"""
     matched = out.matched_rules
+    mc = _matching_config()
     if not matched:
         result = MatchResult(raw_text=name, method="未匹配")
         return result.to_result_row()
     llm_desc = out.llm_desc
-    if llm_desc is not None and llm_desc.strip() in LLM_UNMATCHED_ALIASES:
+    if llm_desc is not None and llm_desc.strip() in mc.llm_unmatched_aliases:
         method = "未搜索到"
     elif llm_desc is not None and not out.from_similarity:
         method = "搜索后匹配"
@@ -240,7 +239,7 @@ async def run_batch_match_async(
     """批量匹配（asyncio 并发）。返回 7 列，顺序与输入一致。"""
     if not categories:
         return []
-    sem = asyncio.Semaphore(BATCH_MAX_WORKERS)
+    sem = asyncio.Semaphore(_matching_config().batch_max_workers)
     tasks = [_match_one_with_sem(name, rules, verified_brands, sem) for name in categories]
     raw_results: list[tuple[str, MatchStoreResult]] = []
     for coro in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="品类匹配", unit="条"):

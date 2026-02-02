@@ -238,3 +238,63 @@ class MatchStoreResult(BaseModel):
     llm_desc: str | None = Field(default=None, description="大模型描述，可选")
 
     model_config = {"arbitrary_types_allowed": True}
+
+
+# ----- 统一 YAML 配置 app_config.yaml -----
+
+
+class MatchingSection(BaseModel):
+    """匹配相关：相似度阈值、LLM 回退、并发数、未匹配标记。"""
+
+    similarity_threshold: float = Field(default=0.0, description="相似度匹配阈值")
+    llm_fallback_threshold: float = Field(default=0.9, description="低于此相似度时触发大模型")
+    batch_max_workers: int = Field(default=8, ge=1, description="批量匹配并发数")
+    llm_unmatched_marker: str = Field(default="未匹配到结果", description="未匹配时展示标记")
+    llm_unmatched_aliases: list[str] = Field(
+        default_factory=lambda: ["未匹配到结果", "未匹配到"],
+        description="视为未匹配的文案列表",
+    )
+
+
+class AppSection(BaseModel):
+    """应用层：规则/品牌文件名、输入文件名忽略。"""
+
+    rules_filename: str = Field(default="原子品类关键词.xlsx", description="规则 Excel 文件名")
+    verified_filename: str = Field(default="校验过的品牌对应原子品类.xlsx", description="已校验品牌 Excel 文件名")
+    input_stem_ignore: str = Field(default="新建文本文档", description="视为未提供文件名的 stem")
+
+
+class EmbeddingSection(BaseModel):
+    """向量模型：BGE 模型 ID、权重、批大小。"""
+
+    bge_model_id: str = Field(default="BAAI/bge-small-zh-v1.5", description="BGE 模型 ID")
+    bge_weight: float = Field(default=0.5, ge=0.0, le=1.0, description="BGE 与 Jaro-Winkler 权重")
+    fill_embedding_chunk: int = Field(default=16000, ge=1, description="单次编码最大条数")
+    encode_batch_size: int = Field(default=512, ge=1, description="编码批大小")
+
+
+class LlmClientSection(BaseModel):
+    """LLM 客户端：max_tokens、日志摘要长度。"""
+
+    max_tokens: int = Field(default=768, ge=1, description="单次调用最大 token")
+    log_input_summary_len: int = Field(default=80, ge=1, description="日志输入摘要长度")
+    log_result_summary_len: int = Field(default=120, ge=1, description="日志结果摘要长度")
+
+
+class PromptSection(BaseModel):
+    """提示词相关：参考关键词个数与字数。"""
+
+    max_keyword_examples: int = Field(default=10, ge=1, description="参考关键词最多条数")
+    max_keyword_hint_chars: int = Field(default=120, ge=1, description="参考关键词最多字数")
+
+
+class AppConfigSchema(BaseModel):
+    """统一配置文件 app_config.yaml 的完整结构；缺省节使用默认值。"""
+
+    llm: LlmConfigSchema = Field(default_factory=LlmConfigSchema, description="大模型配置")
+    mcp: McpConfigSchema = Field(default_factory=McpConfigSchema, description="MCP 服务器列表")
+    matching: MatchingSection = Field(default_factory=MatchingSection, description="匹配参数")
+    app: AppSection = Field(default_factory=AppSection, description="应用层参数")
+    embedding: EmbeddingSection = Field(default_factory=EmbeddingSection, description="向量模型参数")
+    llm_client: LlmClientSection = Field(default_factory=LlmClientSection, description="LLM 客户端参数")
+    prompt: PromptSection = Field(default_factory=PromptSection, description="提示词参数")

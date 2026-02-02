@@ -14,10 +14,13 @@ from .utils.similarity import (
     weighted_combined,
 )
 
-# 中文场景推荐，体积与速度平衡；ModelScope / HuggingFace 均可用此 ID
-BGE_MODEL_ID = "BAAI/bge-small-zh-v1.5"
-
 _model = None
+
+
+def _embedding_config():
+    """embedding 配置（来自 app_config.yaml）；需已调用 load_app_config()。"""
+    from core.config import get_app_config
+    return get_app_config().embedding
 
 
 def _get_model():
@@ -29,6 +32,7 @@ def _get_model():
 
         from paths import get_model_dir
 
+        model_id = _embedding_config().bge_model_id
         # 隐藏 modelscope / huggingface_hub / transformers 在控制台的打印
         _log = logging.getLogger("modelscope")
         _hub = logging.getLogger("huggingface_hub")
@@ -45,7 +49,7 @@ def _get_model():
 
         # 下载：不显示进度条（progress_callbacks=[] 关闭 modelscope 默认进度）
         local_dir = snapshot_download(
-            BGE_MODEL_ID,
+            model_id,
             cache_dir=str(model_dir),
             progress_callbacks=[],
         )
@@ -107,20 +111,18 @@ def cosine_similarity_0_1(text_a: str, text_b: str) -> float:
 def combined_similarity(
     text_a: str,
     text_b: str,
-    bge_weight: float = DEFAULT_BGE_WEIGHT,
+    bge_weight: float | None = None,
 ) -> float:
     """
     BGE 余弦相似度与 Jaro-Winkler 的加权组合，返回值在 [0, 1]。
     bge_weight：BGE 权重（0~1），(1 - bge_weight) 为 Jaro-Winkler 权重。
     提高对语义相近且字面相近（含拼写变体）的匹配准确性。
     """
+    if bge_weight is None:
+        bge_weight = _embedding_config().bge_weight
     bge_sim = cosine_similarity_0_1(text_a, text_b)
     jw_sim = jaro_winkler_similarity(text_a, text_b)
     return weighted_combined(bge_sim, jw_sim, bge_weight)
-
-
-# 单次编码的最大条数，超过则分批以免 OOM（品牌名较短，可设较大）
-_FILL_EMBEDDING_CHUNK = 16_000
 
 
 def fill_brand_embeddings(verified_brands: list[VerifiedBrand]) -> None:
@@ -130,21 +132,22 @@ def fill_brand_embeddings(verified_brands: list[VerifiedBrand]) -> None:
     """
     if not verified_brands:
         return
+    ec = _embedding_config()
+    chunk_size = ec.fill_embedding_chunk
+    batch_size = ec.encode_batch_size
     texts = [vb.brand_name or "" for vb in verified_brands]
     total = len(verified_brands)
-    # 库内前向批大小，GPU 下可适当调大（如 256～512）
-    encode_batch_size = 512
     for start in tqdm(
-        range(0, total, _FILL_EMBEDDING_CHUNK),
+        range(0, total, chunk_size),
         desc="编码品牌向量",
         unit="块",
-        total=(total + _FILL_EMBEDDING_CHUNK - 1) // _FILL_EMBEDDING_CHUNK,
+        total=(total + chunk_size - 1) // chunk_size,
     ):
-        end = min(start + _FILL_EMBEDDING_CHUNK, total)
+        end = min(start + chunk_size, total)
         chunk_texts = texts[start:end]
         emb = encode(
             chunk_texts,
-            batch_size=encode_batch_size,
+            batch_size=batch_size,
             show_progress_bar=False,
         )
         for i, vb in enumerate(verified_brands[start:end]):
@@ -155,7 +158,7 @@ def similarity_scores_with_cached(
     query: str,
     verified_brands: list[VerifiedBrand],
     use_combined: bool = True,
-    bge_weight: float = DEFAULT_BGE_WEIGHT,
+    bge_weight: float | None = None,
 ) -> list[float]:
     """
     使用缓存的品牌向量计算 query 与每个品牌的相似度 [0, 1]。
@@ -178,6 +181,8 @@ def similarity_scores_with_cached(
         bge_scores.append((cos + 1.0) / 2.0)
     if not use_combined:
         return bge_scores
+    if bge_weight is None:
+        bge_weight = _embedding_config().bge_weight
     # 组合：BGE + Jaro-Winkler
     scores: list[float] = []
     for i, vb in enumerate(verified_brands):

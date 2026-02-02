@@ -1,9 +1,8 @@
 """
-core.config：整合路径、llm_config、mcp_config 及统一加载。
+core.config：整合路径、统一 YAML 配置 app_config.yaml 及加载。
 
-- 路径：config 目录、llm_config.json、mcp_client_config.json，以及 model/excel/output/logs（见 .paths）
-- 大模型配置：api_key、base_url、model；加解密与脱敏（见 .llm）
-- MCP 配置：ServerConfig、load_mcp_config（见 .mcp）
+- 配置：config/app_config.yaml（含 llm、mcp、matching、app、embedding、llm_client、prompt）；兼容旧版 llm_config.json、mcp_client_config.json。
+- 路径：config 目录及 model/excel/output/logs（见 .paths）
 - 统一加载：load_app_config() 启动时调用一次，get_* 返回已缓存配置。
 """
 
@@ -14,9 +13,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from models.schemas import ConfigDisplay, LlmConfigResult
+from models.schemas import AppConfigSchema, ConfigDisplay, LlmConfigResult
 
 from . import llm as _llm
+from . import loader as _loader
 from . import mcp as _mcp
 from . import paths as _paths
 
@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 get_config_dir_raw = _paths.get_config_dir_raw
 get_llm_config_path_raw = _paths.get_llm_config_path_raw
 get_mcp_config_path_raw = _paths.get_mcp_config_path_raw
+get_app_config_path = _loader.get_app_config_path
 get_base_dir = _paths.get_base_dir
 get_model_dir = _paths.get_model_dir
 get_excel_dir = _paths.get_excel_dir
@@ -54,35 +55,37 @@ _llm_config_path: Path | None = None
 _mcp_config_path: Path | None = None
 _llm_config: LlmConfigResult | None = None
 _mcp_config: list[Any] | None = None
+_app_config: AppConfigSchema | None = None
 
 
 def load_app_config() -> None:
-    """加载全部配置（config 目录、llm、mcp），仅需在程序启动时调用一次。"""
-    global _loaded, _config_dir, _llm_config_path, _mcp_config_path, _llm_config, _mcp_config
+    """加载全部配置：优先 app_config.yaml，兼容旧版 llm_config.json / mcp_client_config.json。"""
+    global _loaded, _config_dir, _llm_config_path, _mcp_config_path, _llm_config, _mcp_config, _app_config
 
     if _loaded:
         return
 
     _config_dir = get_config_dir_raw()
-    _llm_config_path = get_llm_config_path_raw()
-    _mcp_config_path = get_mcp_config_path_raw()
+    _app_config = _loader.load_app_config_yaml()
+    _llm_config_path = get_app_config_path()
+    _mcp_config_path = get_app_config_path()
 
-    _llm_config = load_llm_config()
-
-    if _mcp_config_path:
-        try:
-            _mcp_config = load_mcp_config(_mcp_config_path) or []
-        except Exception as e:
-            logger.warning("加载 MCP 配置失败: %s", e)
-            _mcp_config = []
-    else:
-        _mcp_config = []
+    _llm_config = load_llm_config(_app_config.llm)
+    _mcp_config = [s for s in _app_config.mcp.servers if s.name]
 
     _loaded = True
     logger.debug(
-        "公用配置已加载: config_dir=%s, llm_path=%s, mcp_path=%s",
-        _config_dir, _llm_config_path, _mcp_config_path,
+        "公用配置已加载: config_dir=%s, config_file=%s",
+        _config_dir, _llm_config_path,
     )
+
+
+def get_app_config() -> AppConfigSchema:
+    """统一配置（app_config.yaml）；未加载时先触发 load_app_config()。"""
+    if not _loaded:
+        load_app_config()
+    assert _app_config is not None
+    return _app_config
 
 
 def get_config_dir() -> Path:
@@ -142,16 +145,17 @@ def main_encrypt() -> None:
     """命令行：uv run -m core.config encrypt <明文key> 或 uv run -m core.config <明文key>"""
     if len(sys.argv) < 2:
         print("用法: uv run -m core.config encrypt <明文API_Key>  或  uv run -m core.config <明文API_Key>")
-        print("输出加密后的字符串，填入 llm_config.json 的 api_key_encrypted。")
+        print("输出加密后的字符串，填入 config/app_config.yaml 的 llm.api_key_encrypted。")
         sys.exit(1)
     plain = (sys.argv[2] if len(sys.argv) >= 3 and sys.argv[1] == "encrypt" else sys.argv[1]).strip()
     enc = encrypt_key(plain)
-    print("将下面一行填入 llm_config.json 的 api_key_encrypted：")
+    print("将下面一行填入 config/app_config.yaml 的 llm.api_key_encrypted：")
     print(enc)
 
 
 __all__ = [
     "load_app_config",
+    "get_app_config",
     "get_config_dir",
     "get_config_dir_raw",
     "get_llm_config",
@@ -168,6 +172,7 @@ __all__ = [
     "ServerConfig",
     "load_mcp_config",
     "main_encrypt",
+    "get_app_config_path",
     "get_base_dir",
     "get_model_dir",
     "get_excel_dir",

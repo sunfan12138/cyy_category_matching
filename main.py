@@ -27,17 +27,12 @@ from core import (
     load_rules,
     load_verified_brands,
 )
-from core.config import load_app_config
+from core.config import load_app_config, get_app_config
 from core.models import CategoryRule, VerifiedBrand
 from models.schemas import RunConfigSchema
 
-# 7 列结果行类型（与 app.io.ResultRow 一致）
+# 7 列结果行类型（与 app.file_io.ResultRow 一致）
 ResultRow = tuple[str, str, str, str, str, str, str]
-
-# 默认规则与已校验品牌文件名（可通过 RunConfigSchema 覆盖）
-DEFAULT_RULES_FILENAME = "原子品类关键词.xlsx"
-DEFAULT_VERIFIED_FILENAME = "校验过的品牌对应原子品类.xlsx"
-DEFAULT_INPUT_STEM_IGNORE = "新建文本文档"
 
 # 向后兼容：运行时配置使用 Pydantic RunConfigSchema
 RunConfig = RunConfigSchema
@@ -63,14 +58,17 @@ def init_config(
     Raises:
         无显式异常；路径不存在时仅创建 log_dir，excel/output 由后续步骤校验。
     """
+    load_app_config()
+    app_cfg = get_app_config().app
     _config = RunConfigSchema(
         excel_dir=excel_dir or get_excel_dir(),
         output_dir=output_dir or get_output_dir(),
         log_dir=log_dir or get_log_dir(),
+        rules_filename=app_cfg.rules_filename,
+        verified_filename=app_cfg.verified_filename,
     )
-    # 先配置日志再加载配置，避免 load_app_config -> load_llm_config 的 warning 在无 handler 时打到控制台（lastResort -> stderr）
+    # 先配置日志再打印（配置已由 load_app_config 加载）
     _setup_logging(_config.log_dir)
-    load_app_config()
     print(f"配置已加载: excel_dir={_config.excel_dir}, output_dir={_config.output_dir}")
     return _config
 
@@ -169,7 +167,7 @@ def save_output(
     output_dir: Path,
     *,
     source_stem: str | None = None,
-    ignore_stem: str = DEFAULT_INPUT_STEM_IGNORE,
+    ignore_stem: str | None = None,
 ) -> Path:
     """
     将匹配结果写入 Excel 并保存到 output_dir。
@@ -186,6 +184,8 @@ def save_output(
     Raises:
         RuntimeError: 写入 Excel 失败。
     """
+    if ignore_stem is None:
+        ignore_stem = get_app_config().app.input_stem_ignore
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     if source_stem and source_stem != ignore_stem:
@@ -237,7 +237,7 @@ def _process_one_file(
     unmatched = sum(1 for r in result_rows if r[4] not in MATCH_SUCCESS_METHODS)
     print(f"匹配成功 {len(result_rows) - unmatched} 条，匹配失败 {unmatched} 条（已标红）。")
 
-    stem = input_path.stem if input_path.stem != DEFAULT_INPUT_STEM_IGNORE else None
+    stem = input_path.stem if input_path.stem != get_app_config().app.input_stem_ignore else None
     try:
         out_path = save_output(result_rows, config.output_dir, source_stem=stem)
     except RuntimeError:
