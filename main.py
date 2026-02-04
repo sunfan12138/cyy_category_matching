@@ -31,8 +31,8 @@ from core.config import load_app_config, get_app_config
 from core.models import CategoryRule, VerifiedBrand
 from models.schemas import RunConfigSchema
 
-# 7 列结果行类型（与 app.file_io.ResultRow 一致）
-ResultRow = tuple[str, str, str, str, str, str, str]
+# 11 列结果行类型（与 app.file_io.ResultRow 一致：线索编码, 输入品类, ..., 品牌, 编码, 原子品类, 相似度, 大模型描述）
+ResultRow = tuple[str, str, str, str, str, str, str, str, str, str, str]
 
 # 向后兼容：运行时配置使用 Pydantic RunConfigSchema
 RunConfig = RunConfigSchema
@@ -138,25 +138,25 @@ def load_data(
 
 
 def run_matching(
-    categories: list[str],
+    items: list[tuple[str, str]],
     rules: list[CategoryRule],
     verified_brands: list[VerifiedBrand],
 ) -> list[ResultRow]:
     """
-    对品类列表执行批量匹配，返回 7 列结果行。
+    对线索列表执行批量匹配（按线索名称匹配），返回 8 列结果行（含线索编码）。
 
     Args:
-        categories: 待匹配品类名称列表。
+        items: 待匹配列表，每项为 (线索编码, 线索名称)。
         rules: 规则列表（由 load_data 返回）。
         verified_brands: 已校验品牌列表（由 load_data 返回）。
 
     Returns:
-        与 categories 顺序一致的 7 列结果行列表（见 app.io.ResultRow）。
+        与 items 顺序一致的 11 列结果行（线索编码, 输入品类, ..., 品牌, 编码, 原子品类, 相似度, 大模型描述）。
     """
-    if not categories:
+    if not items:
         return []
     try:
-        result = run_batch_match(categories, rules, verified_brands)
+        result = run_batch_match(items, rules, verified_brands)
     except Exception as e:
         raise RuntimeError("批量匹配失败") from e
     return result
@@ -173,7 +173,7 @@ def save_output(
     将匹配结果写入 Excel 并保存到 output_dir。
 
     Args:
-        result_rows: 7 列结果行（run_matching 返回值）。
+        result_rows: 11 列结果行（run_matching 返回值，首列为线索编码，相似度拆为 4 列）。
         output_dir: 输出目录，不存在时会创建。
         source_stem: 输入文件名（无后缀），用于生成输出文件名；为空时使用「匹配结果_时间戳」。
         ignore_stem: 当 source_stem 等于此值时视为未提供有意义文件名，按无 stem 处理。
@@ -220,21 +220,21 @@ def _process_one_file(
     返回结果文件路径；读取或匹配失败时返回 None 并已打日志。
     """
     try:
-        categories = read_categories_from_file(input_path)
+        items = read_categories_from_file(input_path)
     except Exception as e:
         print(f"读取文件失败 {input_path}: {e}")
         return None
 
-    if not categories:
-        print(f"文件中没有有效品类行: {input_path}")
+    if not items:
+        print(f"输入 Excel 中没有有效数据行（需有「线索编码」「线索名称」列）: {input_path}")
         return None
 
     try:
-        result_rows = run_matching(categories, rules, verified_brands)
+        result_rows = run_matching(items, rules, verified_brands)
     except RuntimeError:
         return None
 
-    unmatched = sum(1 for r in result_rows if r[4] not in MATCH_SUCCESS_METHODS)
+    unmatched = sum(1 for r in result_rows if r[5] not in MATCH_SUCCESS_METHODS)
     print(f"匹配成功 {len(result_rows) - unmatched} 条，匹配失败 {unmatched} 条（已标红）。")
 
     stem = input_path.stem if input_path.stem != get_app_config().app.input_stem_ignore else None
@@ -255,7 +255,7 @@ def _parse_args(args: list[str] | None = None) -> argparse.Namespace:
         "input_file",
         nargs="?",
         default=None,
-        help="待匹配品类文件路径（每行一个品类）；不指定则进入交互式输入。",
+        help="待匹配 Excel 文件路径（需含「线索编码」「线索名称」列）；不指定则进入交互式输入。",
     )
     parser.add_argument(
         "--no-loop",
@@ -285,7 +285,7 @@ def main(args: list[str] | None = None) -> None:
 
     _ensure_model_and_embeddings(verified_brands)
     if not parsed.no_loop or not parsed.input_file:
-        print("请拖动或输入待匹配品类文件路径（每行一个品类），输入 q 退出。\n")
+        print("请拖动或输入待匹配 Excel 文件路径（需含「线索编码」「线索名称」列），输入 q 退出。\n")
 
     pending_path: str | None = parsed.input_file.strip() if parsed.input_file else None
     if pending_path:

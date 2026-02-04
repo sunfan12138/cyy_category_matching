@@ -11,7 +11,7 @@ from core import (
     match_store,
 )
 from llm import get_category_description_with_search, get_category_description_with_search_async
-from models.schemas import MatchResult, MatchStoreResult
+from models.schemas import MatchStoreResult
 
 from .file_io import ResultRow
 
@@ -162,42 +162,38 @@ async def match_store_categories_async(
     )
 
 
-def _build_result_row(name: str, out: MatchStoreResult) -> ResultRow:
-    """根据单条匹配结果 MatchStoreResult 构建 MatchResult 并转为 7 列 ResultRow。"""
+def _build_result_row(lead_code: str, lead_name: str, out: MatchStoreResult) -> ResultRow:
+    """根据单条匹配结果构建 11 列 ResultRow（相似度拆为 品牌/编码/原子品类/相似度 四列）。"""
     matched = out.matched_rules
     mc = _matching_config()
+    llm_desc = out.llm_desc or ""
     if not matched:
-        result = MatchResult(raw_text=name, method="未匹配")
-        return result.to_result_row()
-    llm_desc = out.llm_desc
-    if llm_desc is not None and llm_desc.strip() in mc.llm_unmatched_aliases:
+        return (
+            lead_code,
+            lead_name,
+            "",
+            "",
+            "",
+            "未匹配",
+            "",
+            "",
+            "",
+            "",
+            llm_desc,
+        )
+    if llm_desc and llm_desc.strip() in mc.llm_unmatched_aliases:
         method = "未搜索到"
-    elif llm_desc is not None and not out.from_similarity:
+    elif llm_desc and not out.from_similarity:
         method = "搜索后匹配"
-    elif llm_desc is not None and out.from_similarity:
+    elif llm_desc and out.from_similarity:
         method = "搜索后未匹配"
     else:
         method = "相似度" if out.from_similarity else "规则"
     ref_brand = out.ref_brand
-    ref_code = str(ref_brand.brand_code) if ref_brand else ""
-    ref_name = (ref_brand.brand_name or "").strip() if ref_brand else ""
-    ref_atomic = (ref_brand.atomic_category or "").strip() if ref_brand else ""
+    sim_brand = (ref_brand.brand_name or "").strip() if ref_brand else ""
+    sim_code = str(ref_brand.brand_code) if ref_brand else ""
+    sim_atomic = (ref_brand.atomic_category or "").strip() if ref_brand else ""
     score_str = f"{out.score:.4f}" if out.from_similarity and ref_brand else ""
-    if method == "规则":
-        similarity_col = "已使用关键词匹配到"
-    elif method == "搜索后匹配":
-        similarity_col = "搜索后匹配到"
-    else:
-        parts = []
-        if ref_name:
-            parts.append(ref_name)
-        if ref_code:
-            parts.append(f"（{ref_code}）")
-        if ref_atomic:
-            parts.append(f" 原子品类 {ref_atomic}")
-        if score_str:
-            parts.append(f" 相似度 {score_str}")
-        similarity_col = "".join(parts).strip() if parts else ""
     if method in ("未搜索到", "搜索后未匹配"):
         level1_cat = code_cat = atomic_cat = ""
     else:
@@ -207,54 +203,57 @@ def _build_result_row(name: str, out: MatchStoreResult) -> ResultRow:
         level1_cat = "；".join(level1_parts) if level1_parts else ""
         code_cat = "；".join(code_parts) if code_parts else ""
         atomic_cat = "；".join(atomic_parts) if atomic_parts else ""
-    result = MatchResult(
-        raw_text=name,
-        level1_category=level1_cat,
-        category_code=code_cat,
-        atomic_category=atomic_cat,
-        method=method,
-        similarity_detail=similarity_col,
-        score=out.score if out.from_similarity and ref_brand else 0.0,
-        llm_desc=llm_desc or "",
+    return (
+        lead_code,
+        lead_name,
+        level1_cat,
+        code_cat,
+        atomic_cat,
+        method,
+        sim_brand,
+        sim_code,
+        sim_atomic,
+        score_str,
+        llm_desc,
     )
-    return result.to_result_row()
 
 
 async def _match_one_with_sem(
-    name: str,
+    item: tuple[str, str],
     rules: list[CategoryRule],
     verified_brands: list[VerifiedBrand],
     sem: asyncio.Semaphore,
-) -> tuple[str, MatchStoreResult]:
+) -> tuple[tuple[str, str], MatchStoreResult]:
+    """单条匹配：item=(线索编码, 线索名称)，按线索名称匹配。"""
+    lead_code, lead_name = item
     async with sem:
-        out = await match_store_categories_async(name, rules, verified_brands)
-        return (name, out)
+        out = await match_store_categories_async(lead_name, rules, verified_brands)
+        return (item, out)
 
 
 async def run_batch_match_async(
-    categories: list[str],
+    items: list[tuple[str, str]],
     rules: list[CategoryRule],
     verified_brands: list[VerifiedBrand],
 ) -> list[ResultRow]:
-    """批量匹配（asyncio 并发）。返回 7 列，顺序与输入一致。"""
-    if not categories:
+    """批量匹配（asyncio 并发）。items=(线索编码, 线索名称)，按线索名称匹配，返回 11 列顺序与输入一致。"""
+    if not items:
         return []
     sem = asyncio.Semaphore(_matching_config().batch_max_workers)
-    tasks = [_match_one_with_sem(name, rules, verified_brands, sem) for name in categories]
-    raw_results: list[tuple[str, MatchStoreResult]] = []
+    tasks = [_match_one_with_sem(item, rules, verified_brands, sem) for item in items]
+    raw_results: list[tuple[tuple[str, str], MatchStoreResult]] = []
     for coro in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="品类匹配", unit="条"):
         raw_results.append(await coro)
-    # 按输入顺序还原：as_completed 乱序，需用 name 映射后按 categories 顺序排列
-    completed: dict[str, ResultRow] = {}
-    for name, out in raw_results:
-        completed[name] = _build_result_row(name, out)
-    return [completed[name] for name in categories]
+    completed: dict[tuple[str, str], ResultRow] = {}
+    for (lead_code, lead_name), out in raw_results:
+        completed[(lead_code, lead_name)] = _build_result_row(lead_code, lead_name, out)
+    return [completed[item] for item in items]
 
 
 def run_batch_match(
-    categories: list[str],
+    items: list[tuple[str, str]],
     rules: list[CategoryRule],
     verified_brands: list[VerifiedBrand],
 ) -> list[ResultRow]:
-    """批量匹配（同步入口，内部 asyncio.run 跑并发）。返回 7 列。"""
-    return asyncio.run(run_batch_match_async(categories, rules, verified_brands))
+    """批量匹配（同步入口，内部 asyncio.run 跑并发）。items=(线索编码, 线索名称)，返回 11 列。"""
+    return asyncio.run(run_batch_match_async(items, rules, verified_brands))

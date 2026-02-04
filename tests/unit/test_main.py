@@ -135,20 +135,21 @@ class TestRunMatching:
         from core.models import CategoryRule, VerifiedBrand
 
         mock_batch.return_value = [
-            ("品类A", "一级", "code1", "原子A", "规则", "", ""),
+            ("LEAD001", "品类A", "一级", "code1", "原子A", "规则", "", "", "", "", ""),
         ]
         rules: list[CategoryRule] = []
         brands: list[VerifiedBrand] = []
 
-        rows = run_matching(["品类A"], rules, brands)
+        rows = run_matching([("LEAD001", "品类A")], rules, brands)
 
         assert len(rows) == 1
-        assert rows[0][0] == "品类A"
-        assert rows[0][4] == "规则"
-        mock_batch.assert_called_once_with(["品类A"], rules, brands)
+        assert rows[0][0] == "LEAD001"
+        assert rows[0][1] == "品类A"
+        assert rows[0][5] == "规则"
+        mock_batch.assert_called_once_with([("LEAD001", "品类A")], rules, brands)
 
     @patch("main.run_batch_match")
-    def test_empty_categories_returns_empty(self, mock_batch: MagicMock) -> None:
+    def test_empty_items_returns_empty(self, mock_batch: MagicMock) -> None:
         mock_batch.return_value = []
         rows = run_matching([], [], [])
         assert rows == []
@@ -163,8 +164,8 @@ class TestSaveOutput:
         self,
         mock_write: MagicMock,
     ) -> None:
-        result_rows: list[tuple[str, str, str, str, str, str, str]] = [
-            ("a", "b", "c", "d", "规则", "e", "f"),
+        result_rows: list[tuple[str, ...]] = [
+            ("code1", "a", "b", "c", "d", "规则", "", "", "", "", "f"),
         ]
         with tempfile.TemporaryDirectory() as d:
             out_dir = Path(d)
