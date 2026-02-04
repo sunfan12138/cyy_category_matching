@@ -86,11 +86,14 @@ def _setup_logging(log_dir: Path) -> None:
     root.setLevel(logging.INFO)
     for h in root.handlers:
         if isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", "") == log_path:
-            return
-    fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-    handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
-    handler.setFormatter(logging.Formatter(fmt))
-    root.addHandler(handler)
+            break
+    else:
+        fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
+        handler.setFormatter(logging.Formatter(fmt))
+        root.addHandler(handler)
+    # 屏蔽 httpx 的 HTTP Request/Response INFO 日志，避免刷屏
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def load_data(
