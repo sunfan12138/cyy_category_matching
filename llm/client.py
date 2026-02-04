@@ -228,194 +228,194 @@ async def _call_llm_with_mcp_async(
         system_content += "\n\n" + prompt_tools
 
     messages_with_system = [{"role": "system", "content": system_content}] + messages
-    client = AsyncOpenAI(api_key=api_key, base_url=base_url.rstrip("/"))
 
-    max_rounds = 8
-    for round_no in range(1, max_rounds + 1):
-        try:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=messages_with_system,
-                tools=tools if tools else None,
-                max_tokens=_llm_client_config().max_tokens,
-            )
-        except Exception as e:
-            elapsed_ms = int((time.perf_counter() - start_time) * 1000)
-            flow["total_latency_ms"] = elapsed_ms
-            flow["status"] = "error"
-            flow["error"] = str(e)
-            _emit_flow_log(flow)
-            logger.error(
-                "[LLM] 模型请求异常 | round=%s | trace_id=%s | context={%s} | input_summary=%s | elapsed=%.2fs | error=%s",
-                round_no,
-                trace_id,
-                ctx_str or "无",
-                input_summary,
-                elapsed_ms / 1000.0,
-                e,
-                exc_info=True,
-            )
-            return None
+    async with AsyncOpenAI(api_key=api_key, base_url=base_url.rstrip("/")) as client:
+        max_rounds = 8
+        for round_no in range(1, max_rounds + 1):
+            try:
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=messages_with_system,
+                    tools=tools if tools else None,
+                    max_tokens=_llm_client_config().max_tokens,
+                )
+            except Exception as e:
+                elapsed_ms = int((time.perf_counter() - start_time) * 1000)
+                flow["total_latency_ms"] = elapsed_ms
+                flow["status"] = "error"
+                flow["error"] = str(e)
+                _emit_flow_log(flow)
+                logger.error(
+                    "[LLM] 模型请求异常 | round=%s | trace_id=%s | context={%s} | input_summary=%s | elapsed=%.2fs | error=%s",
+                    round_no,
+                    trace_id,
+                    ctx_str or "无",
+                    input_summary,
+                    elapsed_ms / 1000.0,
+                    e,
+                    exc_info=True,
+                )
+                return None
 
-        _add_usage(getattr(response, "usage", None))
+            _add_usage(getattr(response, "usage", None))
 
-        choice = response.choices[0] if response.choices else None
-        if not choice:
-            logger.warning("[LLM] 无有效 choice | round=%s | trace_id=%s | context={%s}", round_no, trace_id, ctx_str or "无")
-            elapsed_ms = int((time.perf_counter() - start_time) * 1000)
-            flow["total_latency_ms"] = elapsed_ms
-            flow["status"] = "no_choice"
-            _ensure_step1_system_summary(messages_with_system)
-            _emit_flow_log(flow)
-            return None
-        msg = choice.message
-        if not msg:
-            logger.warning("[LLM] 无 message | round=%s | trace_id=%s | context={%s}", round_no, trace_id, ctx_str or "无")
-            elapsed_ms = int((time.perf_counter() - start_time) * 1000)
-            flow["total_latency_ms"] = elapsed_ms
-            flow["status"] = "no_message"
-            _ensure_step1_system_summary(messages_with_system)
-            _emit_flow_log(flow)
-            return None
+            choice = response.choices[0] if response.choices else None
+            if not choice:
+                logger.warning("[LLM] 无有效 choice | round=%s | trace_id=%s | context={%s}", round_no, trace_id, ctx_str or "无")
+                elapsed_ms = int((time.perf_counter() - start_time) * 1000)
+                flow["total_latency_ms"] = elapsed_ms
+                flow["status"] = "no_choice"
+                _ensure_step1_system_summary(messages_with_system)
+                _emit_flow_log(flow)
+                return None
+            msg = choice.message
+            if not msg:
+                logger.warning("[LLM] 无 message | round=%s | trace_id=%s | context={%s}", round_no, trace_id, ctx_str or "无")
+                elapsed_ms = int((time.perf_counter() - start_time) * 1000)
+                flow["total_latency_ms"] = elapsed_ms
+                flow["status"] = "no_message"
+                _ensure_step1_system_summary(messages_with_system)
+                _emit_flow_log(flow)
+                return None
 
-        usage_for_step = None
-        if getattr(response, "usage", None):
-            u = response.usage
-            usage_for_step = {
-                "prompt_tokens": getattr(u, "prompt_tokens", 0) or 0,
-                "completion_tokens": getattr(u, "completion_tokens", 0) or 0,
-            }
+            usage_for_step = None
+            if getattr(response, "usage", None):
+                u = response.usage
+                usage_for_step = {
+                    "prompt_tokens": getattr(u, "prompt_tokens", 0) or 0,
+                    "completion_tokens": getattr(u, "completion_tokens", 0) or 0,
+                }
 
-        if msg.content and (msg.content or "").strip():
-            result = (msg.content or "").strip()
-            elapsed_ms = int((time.perf_counter() - start_time) * 1000)
+            if msg.content and (msg.content or "").strip():
+                result = (msg.content or "").strip()
+                elapsed_ms = int((time.perf_counter() - start_time) * 1000)
+                step_index += 1
+                _ensure_step1_system_summary(messages_with_system)
+                flow["full_history"].append({
+                    "step": step_index,
+                    "role": "final_output",
+                    "prompt_snapshot": _messages_to_snapshot(messages_with_system),
+                    "content": result,
+                })
+                flow["total_latency_ms"] = elapsed_ms
+                flow["status"] = "success"
+                flow["final_answer"] = result
+                _emit_flow_log(flow)
+                logger.info(
+                    "[LLM] 返回成功 | round=%s | trace_id=%s | context={%s} | result_len=%s | result_summary=%s | elapsed=%.2fs",
+                    round_no,
+                    trace_id,
+                    ctx_str or "无",
+                    len(result),
+                    _summary(result, _llm_client_config().log_result_summary_len),
+                    elapsed_ms / 1000.0,
+                )
+                return result
+
+            if not tools or not getattr(msg, "tool_calls", None):
+                logger.info("[LLM] 无内容且无 tool_calls，结束 | round=%s | trace_id=%s | context={%s}", round_no, trace_id, ctx_str or "无")
+                elapsed_ms = int((time.perf_counter() - start_time) * 1000)
+                flow["total_latency_ms"] = elapsed_ms
+                flow["status"] = "no_content"
+                _ensure_step1_system_summary(messages_with_system)
+                _emit_flow_log(flow)
+                return None
+
+            tool_calls = list(msg.tool_calls or [])
             step_index += 1
+            calls_for_log: list[dict[str, Any]] = []
+            for tc in tool_calls:
+                fn = getattr(tc.function, "name", None) or tc.function.get("name") or ""
+                args_raw = getattr(tc.function, "arguments", None) or tc.function.get("arguments") or "{}"
+                try:
+                    args_dict = json.loads(args_raw) if args_raw else {}
+                except Exception:
+                    args_dict = {}
+                calls_for_log.append({"function": fn, "args": args_dict})
             _ensure_step1_system_summary(messages_with_system)
             flow["full_history"].append({
                 "step": step_index,
-                "role": "final_output",
+                "role": "assistant_tool_call",
                 "prompt_snapshot": _messages_to_snapshot(messages_with_system),
-                "content": result,
+                "calls": calls_for_log,
             })
-            flow["total_latency_ms"] = elapsed_ms
-            flow["status"] = "success"
-            flow["final_answer"] = result
-            _emit_flow_log(flow)
+            called_names = [c["function"] for c in calls_for_log]
             logger.info(
-                "[LLM] 返回成功 | round=%s | trace_id=%s | context={%s} | result_len=%s | result_summary=%s | elapsed=%.2fs",
+                "[LLM] 本轮需调用工具 | round=%s | trace_id=%s | context={%s} | tool_calls=%s",
                 round_no,
                 trace_id,
                 ctx_str or "无",
-                len(result),
-                _summary(result, _llm_client_config().log_result_summary_len),
-                elapsed_ms / 1000.0,
+                called_names,
             )
-            return result
 
-        if not tools or not getattr(msg, "tool_calls", None):
-            logger.info("[LLM] 无内容且无 tool_calls，结束 | round=%s | trace_id=%s | context={%s}", round_no, trace_id, ctx_str or "无")
-            elapsed_ms = int((time.perf_counter() - start_time) * 1000)
-            flow["total_latency_ms"] = elapsed_ms
-            flow["status"] = "no_content"
-            _ensure_step1_system_summary(messages_with_system)
-            _emit_flow_log(flow)
-            return None
+            messages_with_system.append({
+                "role": "assistant",
+                "content": msg.content or "",
+                "tool_calls": [
+                    {"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments or "{}"}}
+                    for tc in tool_calls
+                ],
+            })
 
-        tool_calls = list(msg.tool_calls or [])
-        step_index += 1
-        calls_for_log: list[dict[str, Any]] = []
-        for tc in tool_calls:
-            fn = getattr(tc.function, "name", None) or tc.function.get("name") or ""
-            args_raw = getattr(tc.function, "arguments", None) or tc.function.get("arguments") or "{}"
-            try:
-                args_dict = json.loads(args_raw) if args_raw else {}
-            except Exception:
-                args_dict = {}
-            calls_for_log.append({"function": fn, "args": args_dict})
+            for tc in tool_calls:
+                name = tc.function.name if hasattr(tc.function, "name") else (tc.function.get("name") or "")
+                args_str = tc.function.arguments if hasattr(tc.function, "arguments") else (tc.function.get("arguments") or "{}")
+                try:
+                    args = json.loads(args_str)
+                except Exception:
+                    args = {}
+                t0 = time.perf_counter()
+                content = ""
+                if name in tool_name_to_server_and_tool:
+                    server_name, tool_name, _ = tool_name_to_server_and_tool[name]
+                    try:
+                        async with MCPClientManager(mcp_config) as manager:
+                            result = await manager.call_tool(server_name, tool_name, args)
+                        content = str(getattr(result, "content", None) or result) if result else ""
+                        logger.info(
+                            "[LLM] 工具调用完成 | tool=%s | server=%s | context={%s}",
+                            tool_name,
+                            server_name,
+                            ctx_str or "无",
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "[LLM] 工具调用失败 | tool=%s | server=%s | context={%s} | error=%s",
+                            tool_name,
+                            server_name,
+                            ctx_str or "无",
+                            e,
+                        )
+                        content = ""
+                else:
+                    content = "{}"
+                step_index += 1
+                flow["full_history"].append({
+                    "step": step_index,
+                    "role": "tool_response",
+                    "tool_name": name,
+                    "raw_output": content,
+                })
+                messages_with_system.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": content,
+                })
+
+        elapsed_ms = int((time.perf_counter() - start_time) * 1000)
+        flow["total_latency_ms"] = elapsed_ms
+        flow["status"] = "max_rounds_exceeded"
         _ensure_step1_system_summary(messages_with_system)
-        flow["full_history"].append({
-            "step": step_index,
-            "role": "assistant_tool_call",
-            "prompt_snapshot": _messages_to_snapshot(messages_with_system),
-            "calls": calls_for_log,
-        })
-        called_names = [c["function"] for c in calls_for_log]
-        logger.info(
-            "[LLM] 本轮需调用工具 | round=%s | trace_id=%s | context={%s} | tool_calls=%s",
-            round_no,
+        _emit_flow_log(flow)
+        logger.warning(
+            "[LLM] 达到最大轮数未得到文本结果 | trace_id=%s | context={%s} | input_summary=%s | rounds=%s | elapsed=%.2fs",
             trace_id,
             ctx_str or "无",
-            called_names,
+            input_summary,
+            max_rounds,
+            elapsed_ms / 1000.0,
         )
-
-        messages_with_system.append({
-            "role": "assistant",
-            "content": msg.content or "",
-            "tool_calls": [
-                {"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments or "{}"}}
-                for tc in tool_calls
-            ],
-        })
-
-        for tc in tool_calls:
-            name = tc.function.name if hasattr(tc.function, "name") else (tc.function.get("name") or "")
-            args_str = tc.function.arguments if hasattr(tc.function, "arguments") else (tc.function.get("arguments") or "{}")
-            try:
-                args = json.loads(args_str)
-            except Exception:
-                args = {}
-            t0 = time.perf_counter()
-            content = ""
-            if name in tool_name_to_server_and_tool:
-                server_name, tool_name, _ = tool_name_to_server_and_tool[name]
-                try:
-                    async with MCPClientManager(mcp_config) as manager:
-                        result = await manager.call_tool(server_name, tool_name, args)
-                    content = str(getattr(result, "content", None) or result) if result else ""
-                    logger.info(
-                        "[LLM] 工具调用完成 | tool=%s | server=%s | context={%s}",
-                        tool_name,
-                        server_name,
-                        ctx_str or "无",
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "[LLM] 工具调用失败 | tool=%s | server=%s | context={%s} | error=%s",
-                        tool_name,
-                        server_name,
-                        ctx_str or "无",
-                        e,
-                    )
-                    content = ""
-            else:
-                content = "{}"
-            step_index += 1
-            flow["full_history"].append({
-                "step": step_index,
-                "role": "tool_response",
-                "tool_name": name,
-                "raw_output": content,
-            })
-            messages_with_system.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": content,
-            })
-
-    elapsed_ms = int((time.perf_counter() - start_time) * 1000)
-    flow["total_latency_ms"] = elapsed_ms
-    flow["status"] = "max_rounds_exceeded"
-    _ensure_step1_system_summary(messages_with_system)
-    _emit_flow_log(flow)
-    logger.warning(
-        "[LLM] 达到最大轮数未得到文本结果 | trace_id=%s | context={%s} | input_summary=%s | rounds=%s | elapsed=%.2fs",
-        trace_id,
-        ctx_str or "无",
-        input_summary,
-        max_rounds,
-        elapsed_ms / 1000.0,
-    )
-    return None
+        return None
 
 
 def _get_llm_call_params(rules: list[Any] | None) -> Any | None:

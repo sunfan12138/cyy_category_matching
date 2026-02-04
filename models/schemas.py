@@ -244,11 +244,16 @@ class MatchStoreResult(BaseModel):
 
 
 class MatchingSection(BaseModel):
-    """匹配相关：相似度阈值、LLM 回退、并发数、未匹配标记。"""
+    """匹配相关：相似度阈值、LLM 回退、并发数、未匹配标记、分块写入。"""
 
     similarity_threshold: float = Field(default=0.0, description="相似度匹配阈值")
     llm_fallback_threshold: float = Field(default=0.9, description="低于此相似度时触发大模型")
     batch_max_workers: int = Field(default=8, ge=1, description="批量匹配并发数")
+    batch_save_chunk_size: int = Field(
+        default=0,
+        ge=0,
+        description="每处理多少条就追加写入结果文件一次，0 表示不分块一次性写入；>0 可降低内存并保留部分结果",
+    )
     llm_unmatched_marker: str = Field(default="未匹配到结果", description="未匹配时展示标记")
     llm_unmatched_aliases: list[str] = Field(
         default_factory=lambda: ["未匹配到结果", "未匹配到"],
@@ -262,6 +267,21 @@ class AppSection(BaseModel):
     rules_filename: str = Field(default="原子品类关键词.xlsx", description="规则 Excel 文件名")
     verified_filename: str = Field(default="校验过的品牌对应原子品类.xlsx", description="已校验品牌 Excel 文件名")
     input_stem_ignore: str = Field(default="新建文本文档", description="视为未提供文件名的 stem")
+
+
+class LoggingSection(BaseModel):
+    """日志：按大小切割时的单文件上限与保留备份数。"""
+
+    log_rotate_max_bytes: int = Field(
+        default=10 * 1024 * 1024,
+        ge=1024,
+        description="单日志文件超过该字节数时切割（默认 10MB）",
+    )
+    log_rotate_backup_count: int = Field(
+        default=5,
+        ge=0,
+        description="切割后保留的历史文件个数，0 表示不限制",
+    )
 
 
 class EmbeddingSection(BaseModel):
@@ -295,6 +315,7 @@ class AppConfigSchema(BaseModel):
     mcp: McpConfigSchema = Field(default_factory=McpConfigSchema, description="MCP 服务器列表")
     matching: MatchingSection = Field(default_factory=MatchingSection, description="匹配参数")
     app: AppSection = Field(default_factory=AppSection, description="应用层参数")
+    logging: LoggingSection = Field(default_factory=LoggingSection, description="日志切割参数")
     embedding: EmbeddingSection = Field(default_factory=EmbeddingSection, description="向量模型参数")
     llm_client: LlmClientSection = Field(default_factory=LlmClientSection, description="LLM 客户端参数")
     prompt: PromptSection = Field(default_factory=PromptSection, description="提示词参数")

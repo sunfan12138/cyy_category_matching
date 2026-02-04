@@ -22,11 +22,12 @@ mcp:
     #   transport: "streamable-http"
     #   url: "https://your-mcp-server.example.com/mcp"
 
-# 匹配：相似度阈值、LLM 回退、并发数
+# 匹配：相似度阈值、LLM 回退、并发数、分块写入
 matching:
   similarity_threshold: 0
   llm_fallback_threshold: 0.9
   batch_max_workers: 8
+  batch_save_chunk_size: 0   # 每处理多少条就追加写入一次，0 表示不分块；设为 2000 等可降低内存并保留部分结果
   llm_unmatched_marker: "未匹配到结果"
   llm_unmatched_aliases: ["未匹配到结果", "未匹配到"]
 
@@ -35,6 +36,11 @@ app:
   rules_filename: "原子品类关键词.xlsx"
   verified_filename: "校验过的品牌对应原子品类.xlsx"
   input_stem_ignore: "新建文本文档"
+
+# 日志：按大小切割时的单文件上限与保留备份数
+logging:
+  log_rotate_max_bytes: 10485760   # 单文件超过该字节数时切割，默认 10MB
+  log_rotate_backup_count: 5      # 切割后保留的历史文件个数，0 表示不限制
 
 # 向量模型：BGE 模型与相似度权重
 embedding:

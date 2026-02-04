@@ -11,6 +11,7 @@ import argparse
 import logging
 import sys
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from app import (
@@ -19,7 +20,11 @@ from app import (
     run_batch_match,
     write_result_excel,
 )
-from app.file_io import MATCH_SUCCESS_METHODS
+from app.file_io import (
+    MATCH_SUCCESS_METHODS,
+    append_result_rows,
+    start_result_excel,
+)
 from paths import get_excel_dir, get_log_dir, get_output_dir
 from core import (
     ensure_model_loaded,
@@ -30,6 +35,8 @@ from core import (
 from core.config import load_app_config, get_app_config
 from core.models import CategoryRule, VerifiedBrand
 from models.schemas import RunConfigSchema
+
+logger = logging.getLogger(__name__)
 
 # 11 列结果行类型（与 app.file_io.ResultRow 一致：线索编码, 输入品类, ..., 品牌, 编码, 原子品类, 相似度, 大模型描述）
 ResultRow = tuple[str, str, str, str, str, str, str, str, str, str, str]
@@ -76,8 +83,11 @@ def init_config(
 def _setup_logging(log_dir: Path) -> None:
     """
     将日志按日期写入 log_dir，文件名 category_matching_YYYYMMDD.log。
-    若已存在指向当日日志文件的 FileHandler 则不再添加，避免重复。
+    单文件超过 app_config.yaml 中 logging.log_rotate_max_bytes 时自动切割，
+    保留 logging.log_rotate_backup_count 个历史文件。
+    若已存在指向当日日志文件的 FileHandler/RotatingFileHandler 则不再添加，避免重复。
     """
+    log_cfg = get_app_config().logging
     log_dir.mkdir(parents=True, exist_ok=True)
     today = datetime.now().strftime("%Y%m%d")
     log_file = log_dir / f"category_matching_{today}.log"
@@ -85,11 +95,17 @@ def _setup_logging(log_dir: Path) -> None:
     root = logging.getLogger()
     root.setLevel(logging.INFO)
     for h in root.handlers:
-        if isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", "") == log_path:
+        if isinstance(h, (logging.FileHandler, RotatingFileHandler)) and getattr(h, "baseFilename", "") == log_path:
             break
     else:
         fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-        handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
+        handler = RotatingFileHandler(
+            log_file,
+            mode="a",
+            encoding="utf-8",
+            maxBytes=log_cfg.log_rotate_max_bytes,
+            backupCount=log_cfg.log_rotate_backup_count,
+        )
         handler.setFormatter(logging.Formatter(fmt))
         root.addHandler(handler)
     # 屏蔽 httpx 的 HTTP Request/Response INFO 日志，避免刷屏
@@ -203,6 +219,24 @@ def save_output(
     return output_path
 
 
+def _get_output_path(
+    output_dir: Path,
+    *,
+    source_stem: str | None = None,
+    ignore_stem: str | None = None,
+) -> Path:
+    """生成与 save_output 一致的结果文件路径（不写入内容）。"""
+    if ignore_stem is None:
+        ignore_stem = get_app_config().app.input_stem_ignore
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if source_stem and source_stem != ignore_stem:
+        output_filename = f"{source_stem}_匹配结果_{stamp}.xlsx"
+    else:
+        output_filename = f"匹配结果_{stamp}.xlsx"
+    return output_dir / output_filename
+
+
 def _ensure_model_and_embeddings(
     verified_brands: list[VerifiedBrand],
 ) -> None:
@@ -232,21 +266,60 @@ def _process_one_file(
         print(f"输入 Excel 中没有有效数据行（需有「线索编码」「线索名称」列）: {input_path}")
         return None
 
-    try:
-        result_rows = run_matching(items, rules, verified_brands)
-    except RuntimeError:
-        return None
-
-    unmatched = sum(1 for r in result_rows if r[5] not in MATCH_SUCCESS_METHODS)
-    print(f"匹配成功 {len(result_rows) - unmatched} 条，匹配失败 {unmatched} 条（已标红）。")
-
     stem = input_path.stem if input_path.stem != get_app_config().app.input_stem_ignore else None
+    chunk_size = get_app_config().matching.batch_save_chunk_size
+
+    if chunk_size <= 0 or len(items) <= chunk_size:
+        # 不分块：一次性匹配并写入
+        try:
+            result_rows = run_matching(items, rules, verified_brands)
+        except RuntimeError as e:
+            logger.exception("批量匹配失败")
+            print(f"批量匹配失败: {e}")
+            if e.__cause__:
+                print(f"  原因: {e.__cause__}")
+            return None
+        unmatched = sum(1 for r in result_rows if r[5] not in MATCH_SUCCESS_METHODS)
+        print(f"匹配成功 {len(result_rows) - unmatched} 条，匹配失败 {unmatched} 条（已标红）。")
+        try:
+            out_path = save_output(result_rows, config.output_dir, source_stem=stem)
+        except RuntimeError as e:
+            logger.exception("写入结果失败")
+            print(f"写入结果失败: {e}")
+            return None
+        print(f"已写入: {out_path}")
+        return out_path
+
+    # 分块处理：每 chunk_size 条匹配一次并追加写入，降低内存并保留部分结果
     try:
-        out_path = save_output(result_rows, config.output_dir, source_stem=stem)
-    except RuntimeError:
+        output_path = _get_output_path(config.output_dir, source_stem=stem)
+        wb, ws = start_result_excel(output_path)
+    except Exception as e:
+        logger.exception("创建结果文件失败")
+        print(f"创建结果文件失败: {e}")
         return None
-    print(f"已写入: {out_path}")
-    return out_path
+    total_ok = 0
+    total_fail = 0
+    try:
+        for start in range(0, len(items), chunk_size):
+            chunk = items[start : start + chunk_size]
+            try:
+                chunk_results = run_matching(chunk, rules, verified_brands)
+            except RuntimeError as e:
+                logger.exception("批量匹配失败（分块 %s-%s）", start, start + len(chunk))
+                print(f"批量匹配失败: {e}")
+                if e.__cause__:
+                    print(f"  原因: {e.__cause__}")
+                break
+            append_result_rows(wb, ws, chunk_results, output_path)
+            total_ok += sum(1 for r in chunk_results if r[5] in MATCH_SUCCESS_METHODS)
+            total_fail += sum(1 for r in chunk_results if r[5] not in MATCH_SUCCESS_METHODS)
+        print(f"匹配成功 {total_ok} 条，匹配失败 {total_fail} 条（已标红）。")
+    except Exception as e:
+        logger.exception("分块写入失败")
+        print(f"分块写入失败: {e}")
+    print(f"已写入: {output_path}")
+    return output_path
 
 
 def _parse_args(args: list[str] | None = None) -> argparse.Namespace:

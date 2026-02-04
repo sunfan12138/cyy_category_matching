@@ -13,7 +13,7 @@ from core import (
 from llm import get_category_description_with_search, get_category_description_with_search_async
 from models.schemas import MatchStoreResult
 
-from .file_io import ResultRow
+from .file_io import METHOD_EXCEPTION, ResultRow
 
 logger = logging.getLogger(__name__)
 
@@ -223,12 +223,33 @@ async def _match_one_with_sem(
     rules: list[CategoryRule],
     verified_brands: list[VerifiedBrand],
     sem: asyncio.Semaphore,
-) -> tuple[tuple[str, str], MatchStoreResult]:
-    """单条匹配：item=(线索编码, 线索名称)，按线索名称匹配。"""
+) -> tuple[tuple[str, str], MatchStoreResult | None]:
+    """单条匹配：item=(线索编码, 线索名称)，按线索名称匹配。异常时返回 (item, None)，由调用方记为「程序异常」并标红。"""
     lead_code, lead_name = item
     async with sem:
-        out = await match_store_categories_async(lead_name, rules, verified_brands)
-        return (item, out)
+        try:
+            out = await match_store_categories_async(lead_name, rules, verified_brands)
+            return (item, out)
+        except Exception:
+            logger.exception("单条匹配异常 | lead_code=%s | lead_name=%s", lead_code, (lead_name or "")[:50])
+            return (item, None)
+
+
+def _build_exception_result_row(lead_code: str, lead_name: str) -> ResultRow:
+    """单条匹配发生异常时返回的 11 列结果行（匹配方式为「程序异常」，会标红）。"""
+    return (
+        lead_code,
+        lead_name,
+        "",
+        "",
+        "",
+        METHOD_EXCEPTION,
+        "",
+        "",
+        "",
+        "",
+        METHOD_EXCEPTION,
+    )
 
 
 async def run_batch_match_async(
@@ -236,17 +257,20 @@ async def run_batch_match_async(
     rules: list[CategoryRule],
     verified_brands: list[VerifiedBrand],
 ) -> list[ResultRow]:
-    """批量匹配（asyncio 并发）。items=(线索编码, 线索名称)，按线索名称匹配，返回 11 列顺序与输入一致。"""
+    """批量匹配（asyncio 并发）。单条异常记为「程序异常」并标红，其余继续。返回 11 列顺序与输入一致。"""
     if not items:
         return []
     sem = asyncio.Semaphore(_matching_config().batch_max_workers)
     tasks = [_match_one_with_sem(item, rules, verified_brands, sem) for item in items]
-    raw_results: list[tuple[tuple[str, str], MatchStoreResult]] = []
+    raw_results: list[tuple[tuple[str, str], MatchStoreResult | None]] = []
     for coro in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="品类匹配", unit="条"):
         raw_results.append(await coro)
     completed: dict[tuple[str, str], ResultRow] = {}
     for (lead_code, lead_name), out in raw_results:
-        completed[(lead_code, lead_name)] = _build_result_row(lead_code, lead_name, out)
+        if out is None:
+            completed[(lead_code, lead_name)] = _build_exception_result_row(lead_code, lead_name)
+        else:
+            completed[(lead_code, lead_name)] = _build_result_row(lead_code, lead_name, out)
     return [completed[item] for item in items]
 
 
