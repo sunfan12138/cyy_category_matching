@@ -271,6 +271,7 @@ def _process_one_file(
 
     if chunk_size <= 0 or len(items) <= chunk_size:
         # 不分块：一次性匹配并写入
+        print(f"总条数: {len(items)} 条，开始匹配…")
         try:
             result_rows = run_matching(items, rules, verified_brands)
         except RuntimeError as e:
@@ -290,16 +291,18 @@ def _process_one_file(
         print(f"已写入: {out_path}")
         return out_path
 
-    # 分块处理：每 chunk_size 条匹配一次并追加写入，降低内存并保留部分结果
+    # 分块处理：每 chunk_size 条匹配一次并追加写入，每次保存后关闭文件，便于运行中打开查看
     try:
         output_path = _get_output_path(config.output_dir, source_stem=stem)
-        wb, ws = start_result_excel(output_path)
+        start_result_excel(output_path)
     except Exception as e:
         logger.exception("创建结果文件失败")
         print(f"创建结果文件失败: {e}")
         return None
     total_ok = 0
     total_fail = 0
+    num_chunks = (len(items) + chunk_size - 1) // chunk_size
+    print(f"总条数: {len(items)} 条，分 {num_chunks} 批处理（每批最多 {chunk_size} 条）。")
     try:
         for start in range(0, len(items), chunk_size):
             chunk = items[start : start + chunk_size]
@@ -311,9 +314,12 @@ def _process_one_file(
                 if e.__cause__:
                     print(f"  原因: {e.__cause__}")
                 break
-            append_result_rows(wb, ws, chunk_results, output_path)
+            append_result_rows(output_path, chunk_results)
             total_ok += sum(1 for r in chunk_results if r[5] in MATCH_SUCCESS_METHODS)
             total_fail += sum(1 for r in chunk_results if r[5] not in MATCH_SUCCESS_METHODS)
+            processed = start + len(chunk_results)
+            pct = 100.0 * processed / len(items)
+            print(f"总进度: {processed}/{len(items)} ({pct:.1f}%)")
         print(f"匹配成功 {total_ok} 条，匹配失败 {total_fail} 条（已标红）。")
     except Exception as e:
         logger.exception("分块写入失败")

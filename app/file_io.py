@@ -4,7 +4,6 @@ from pathlib import Path
 
 import openpyxl
 from openpyxl.styles import Font
-from openpyxl.worksheet.worksheet import Worksheet
 
 from core.utils.excel_io import cell_value, open_excel_read
 
@@ -114,10 +113,11 @@ def write_result_excel(rows: list[ResultRow], output_path: Path) -> None:
     wb.save(output_path)
 
 
-def start_result_excel(output_path: Path) -> tuple[openpyxl.Workbook, Worksheet]:
+def start_result_excel(output_path: Path) -> None:
     """
-    创建结果 Excel 并只写入两行表头（结构同 write_result_excel），保存后返回 (wb, ws)。
-    用于分块处理时先建文件，再通过 append_result_rows 追加数据行。
+    创建结果 Excel 并只写入两行表头（结构同 write_result_excel），保存后关闭。
+    用于分块处理时先建文件，再通过 append_result_rows 追加数据行。每次写入后均关闭文件，
+    便于程序运行过程中用 Excel 打开查看（避免 Windows 下 EBUSY 占用）。
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -136,17 +136,23 @@ def start_result_excel(output_path: Path) -> tuple[openpyxl.Workbook, Worksheet]
         ws.merge_cells(start_row=1, start_column=col, end_row=2, end_column=col)
     ws.merge_cells(start_row=1, start_column=7, end_row=1, end_column=10)
     wb.save(output_path)
-    return wb, ws
+    wb.close()
 
 
-def append_result_rows(
-    wb: openpyxl.Workbook,
-    ws: Worksheet,
-    rows: list[ResultRow],
-    output_path: Path,
-) -> None:
-    """追加一批结果行到已有工作表（未匹配/程序异常行标红），并保存。"""
+def append_result_rows(output_path: Path, rows: list[ResultRow]) -> None:
+    """
+    向已有结果文件追加一批数据行（未匹配/程序异常行标红），保存后关闭工作簿。
+    每次只在该函数内打开文件，写完后立即关闭，避免运行中被占用（EBUSY）。
+    """
+    if not rows:
+        return
+    output_path = Path(output_path)
     red_font = Font(color="FF0000")
+    wb = openpyxl.load_workbook(output_path)
+    ws = wb.active
+    if ws is None:
+        wb.close()
+        raise RuntimeError("无法打开工作表")
     start_row = ws.max_row + 1
     for i, row_data in enumerate(rows):
         row_idx = start_row + i
@@ -155,3 +161,4 @@ def append_result_rows(
             if len(row_data) > 5 and row_data[5] not in MATCH_SUCCESS_METHODS:
                 cell.font = red_font
     wb.save(output_path)
+    wb.close()
