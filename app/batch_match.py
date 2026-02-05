@@ -87,11 +87,13 @@ def match_store_categories(
             score=sim_result.score,
             llm_desc=desc,
         )
+    # 无内容且无 tool_calls 时仍输出相似度匹配结果，但标记为「搜索后未匹配」
     return MatchStoreResult(
         matched_rules=sim_result.rules,
         from_similarity=True,
         ref_brand=sim_result.brand,
         score=sim_result.score,
+        llm_desc="大模型无有效返回（无内容且无 tool_calls）",
     )
 
 
@@ -154,11 +156,13 @@ async def match_store_categories_async(
             score=sim_result.score,
             llm_desc=desc,
         )
+    # 无内容且无 tool_calls 时仍输出相似度匹配结果，但标记为「搜索后未匹配」
     return MatchStoreResult(
         matched_rules=sim_result.rules,
         from_similarity=True,
         ref_brand=sim_result.brand,
         score=sim_result.score,
+        llm_desc="大模型无有效返回（无内容且无 tool_calls）",
     )
 
 
