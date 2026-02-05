@@ -27,6 +27,57 @@ def _http_logger() -> logging.Logger:
 _SYSTEM_SNAPSHOT_MAX = 200
 # 单条 tool 返回在 snapshot 中超过此长度则截断
 _TOOL_OUTPUT_SNAPSHOT_MAX = 800
+# 清洗 assistant content 时，仅在前缀区段内查找 { 或 <，超过则不再截断（避免误删正常正文）
+_ASSISTANT_CONTENT_STRIP_LOOKAHEAD = 512
+
+
+def _sanitize_assistant_content_with_tool_call(content: str | None) -> str:
+    """当 assistant 同时返回 tool_calls 时，content 里常含「多余字符 + JSON/tool_call」。
+    部分模型会先输出多余字符（如单个汉字）再输出工具调用，此处去掉该前缀，便于日志与展示。
+    """
+    s = (content or "").strip()
+    if not s:
+        return s
+    # 若以 { 或 < 开头，视为已是合法工具调用/JSON 前缀，不处理
+    if s[0] in ("{", "<"):
+        return s
+    # 在整段前缀（最多 _ASSISTANT_CONTENT_STRIP_LOOKAHEAD 字符）内找第一个 { 或 <，从该处截取
+    look = s[:_ASSISTANT_CONTENT_STRIP_LOOKAHEAD]
+    for i, c in enumerate(look):
+        if c in ("{", "<"):
+            return s[i:].strip()
+    return s
+
+
+def _content_looks_like_tool_call(content: str | None) -> bool:
+    """判断 content 是否实为工具调用文本（部分模型只把 tool_call 放在 content 里且不返回结构化 tool_calls）。
+    若为 True，不应把该 content 当作最终品类描述返回。
+    """
+    s = (content or "").strip()
+    if not s:
+        return False
+    # 含 </tool_call> 标记则视为工具调用片段
+    if "</tool_call>" in s:
+        return True
+    # 清洗前缀后再看：可能是单一 JSON 对象 {"name":"...", "arguments":{...}}
+    cleaned = _sanitize_assistant_content_with_tool_call(s)
+    if not cleaned:
+        return False
+    if cleaned.startswith("{"):
+        try:
+            # 取第一行或第一个完整 JSON 对象，避免后面跟自然语言时误判
+            end = cleaned.find("\n")
+            if end == -1:
+                end = len(cleaned)
+            first = cleaned[:end].strip()
+            if first.endswith("</tool_call>"):
+                first = first.replace("</tool_call>", "").strip()
+            obj = json.loads(first)
+            if isinstance(obj, dict) and "name" in obj and "arguments" in obj:
+                return True
+        except Exception:
+            pass
+    return False
 
 
 def _messages_to_snapshot(messages: list[dict[str, Any]], max_chars: int = 12000) -> str:
@@ -44,6 +95,8 @@ def _messages_to_snapshot(messages: list[dict[str, Any]], max_chars: int = 12000
             parts.append(f"User: {content}")
         elif role == "assistant":
             if m.get("tool_calls"):
+                # 展示时再次清洗，避免多余前缀（如单个汉字）出现在 snapshot/日志
+                content = _sanitize_assistant_content_with_tool_call(content or "")
                 tc_sum = ", ".join(
                     str(tc.get("function", {}).get("name", "")) for tc in (m.get("tool_calls") or [])
                 )
@@ -286,33 +339,46 @@ async def _call_llm_with_mcp_async(
                     "completion_tokens": getattr(u, "completion_tokens", 0) or 0,
                 }
 
-            if msg.content and (msg.content or "").strip():
-                result = (msg.content or "").strip()
-                elapsed_ms = int((time.perf_counter() - start_time) * 1000)
-                step_index += 1
-                _ensure_step1_system_summary(messages_with_system)
-                flow["full_history"].append({
-                    "step": step_index,
-                    "role": "final_output",
-                    "prompt_snapshot": _messages_to_snapshot(messages_with_system),
-                    "content": result,
-                })
-                flow["total_latency_ms"] = elapsed_ms
-                flow["status"] = "success"
-                flow["final_answer"] = result
-                _emit_flow_log(flow)
-                logger.info(
-                    "[LLM] 返回成功 | round=%s | trace_id=%s | context={%s} | result_len=%s | result_summary=%s | elapsed=%.2fs",
-                    round_no,
-                    trace_id,
-                    ctx_str or "无",
-                    len(result),
-                    _summary(result, _llm_client_config().log_result_summary_len),
-                    elapsed_ms / 1000.0,
-                )
-                return result
+            # 仅当「无 tool_calls」时把 content 当作最终答案；若同时有 tool_calls，多为模型把工具调用写在 content 里，应走工具分支
+            has_tool_calls = bool(getattr(msg, "tool_calls", None))
+            if msg.content and (msg.content or "").strip() and not has_tool_calls:
+                raw = (msg.content or "").strip()
+                result = _sanitize_assistant_content_with_tool_call(raw)
+                # 部分模型只把工具调用写在 content 里且不返回结构化 tool_calls，此时不应把该 content 当最终答案
+                if _content_looks_like_tool_call(result):
+                    logger.info(
+                        "[LLM] content 实为工具调用文本，按无有效结果处理 | round=%s | trace_id=%s | context={%s}",
+                        round_no,
+                        trace_id,
+                        ctx_str or "无",
+                    )
+                    # 不 return，落到下方 no_content 分支
+                else:
+                    elapsed_ms = int((time.perf_counter() - start_time) * 1000)
+                    step_index += 1
+                    _ensure_step1_system_summary(messages_with_system)
+                    flow["full_history"].append({
+                        "step": step_index,
+                        "role": "final_output",
+                        "prompt_snapshot": _messages_to_snapshot(messages_with_system),
+                        "content": result,
+                    })
+                    flow["total_latency_ms"] = elapsed_ms
+                    flow["status"] = "success"
+                    flow["final_answer"] = result
+                    _emit_flow_log(flow)
+                    logger.info(
+                        "[LLM] 返回成功 | round=%s | trace_id=%s | context={%s} | result_len=%s | result_summary=%s | elapsed=%.2fs",
+                        round_no,
+                        trace_id,
+                        ctx_str or "无",
+                        len(result),
+                        _summary(result, _llm_client_config().log_result_summary_len),
+                        elapsed_ms / 1000.0,
+                    )
+                    return result
 
-            if not tools or not getattr(msg, "tool_calls", None):
+            if not tools or not has_tool_calls:
                 logger.info("[LLM] 无内容且无 tool_calls，结束 | round=%s | trace_id=%s | context={%s}", round_no, trace_id, ctx_str or "无")
                 elapsed_ms = int((time.perf_counter() - start_time) * 1000)
                 flow["total_latency_ms"] = elapsed_ms
@@ -348,9 +414,11 @@ async def _call_llm_with_mcp_async(
                 called_names,
             )
 
+            # 清洗 content：部分模型在 tool_calls 时会在 content 里带多余前缀（如单个汉字），去掉以便日志可读
+            assistant_content = _sanitize_assistant_content_with_tool_call(msg.content)
             messages_with_system.append({
                 "role": "assistant",
-                "content": msg.content or "",
+                "content": assistant_content,
                 "tool_calls": [
                     {"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments or "{}"}}
                     for tc in tool_calls
