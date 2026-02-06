@@ -148,15 +148,23 @@ class LlmConfigSchema(BaseModel):
 
 
 class McpServerSchema(BaseModel):
-    """单个 MCP 服务器配置项。"""
+    """
+    单个 MCP 服务器配置项。
+    传输协议与 Pydantic AI MCP 客户端一致：stdio / streamable-http / sse。
+    参见 https://ai.pydantic.org.cn/mcp/client/
+    """
 
     name: str = Field(description="服务器名称")
-    transport: str = Field(default="stdio", description="stdio | streamable-http | sse")
-    url: str = Field(default="", description="URL，用于 http/sse")
-    command: str = Field(default="", description="命令行，用于 stdio")
-    args: list[str] | None = Field(default=None, description="命令行参数")
-    env: dict[str, str] | None = Field(default=None, description="环境变量")
-    cwd: str | None = Field(default=None, description="工作目录")
+    transport: str = Field(
+        default="stdio",
+        description="stdio（子进程）| streamable-http（推荐）| sse（已弃用，建议用 streamable-http）",
+    )
+    url: str = Field(default="", description="连接 URL，用于 streamable-http / sse")
+    command: str = Field(default="", description="可执行命令，用于 stdio")
+    args: list[str] | None = Field(default=None, description="命令行参数，用于 stdio")
+    env: dict[str, str] | None = Field(default=None, description="环境变量，用于 stdio")
+    cwd: str | None = Field(default=None, description="工作目录，用于 stdio")
+    timeout_seconds: int | None = Field(default=None, description="stdio 子进程超时秒数，未设则用默认值 10")
 
     @field_validator("name", "transport", "url", "command", mode="before")
     @classmethod

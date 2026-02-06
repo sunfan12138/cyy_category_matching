@@ -1,4 +1,11 @@
-"""MCP 客户端管理器：连接多个配置的服务器，聚合 list_tools / call_tool。"""
+"""
+MCP 客户端管理器：基于 mcp 库直接连接多个配置的服务器，聚合 list_tools / call_tool。
+
+注意：与 LLM 联动的 MCP 调用由 Pydantic AI Agent 完成（见 llm.client），
+使用 MCPServerStdio / MCPServerStreamableHTTP / MCPServerSSE 作为 toolsets。
+本模块适用于不经过 Agent 的直接 MCP 会话（如列出工具、单独调用工具）。
+参见 https://ai.pydantic.org.cn/mcp/client/
+"""
 
 from __future__ import annotations
 
@@ -17,6 +24,7 @@ from .config import ServerConfig
 class MCPClientManager:
     """
     通过配置连接多个 MCP 服务器，提供聚合的 list_tools 与 call_tool。
+    传输支持：stdio、streamable-http、sse（与 Pydantic AI 文档一致）。
     使用方式：async with MCPClientManager(config_list) as manager: ...
     """
 
