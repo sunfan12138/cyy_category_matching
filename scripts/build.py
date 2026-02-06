@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import io
 import os
 import re
 import subprocess
@@ -23,6 +24,25 @@ from pathlib import Path
 
 # 项目根目录（脚本所在目录的上一级）
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def _ensure_utf8_io() -> None:
+    """On Windows, force stdout/stderr to UTF-8 so Chinese and other Unicode print without UnicodeEncodeError."""
+    if sys.platform != "win32":
+        return
+    for name, stream in [("stdout", sys.stdout), ("stderr", sys.stderr)]:
+        if stream is None:
+            continue
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError):
+            buf = getattr(stream, "buffer", None)
+            if buf is not None:
+                setattr(
+                    sys,
+                    name,
+                    io.TextIOWrapper(buf, encoding="utf-8", errors="replace", line_buffering=True),
+                )
 
 
 def get_version_from_pyproject() -> str:
@@ -43,6 +63,7 @@ def get_default_build_target() -> str:
 
 
 def main() -> int:
+    _ensure_utf8_io()
     version = os.environ.get("VERSION") or get_version_from_pyproject()
     build_target = (os.environ.get("BUILD_TARGET") or get_default_build_target()).lower()
     output_dir = Path(os.environ.get("OUTPUT_DIR", "dist")).resolve()
