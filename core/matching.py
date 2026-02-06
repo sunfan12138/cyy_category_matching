@@ -18,11 +18,11 @@ def _argmax_with_threshold(
     """返回 (最大分索引, 最大分)；若最大分 < threshold 或无有效项则返回 None。"""
     best_score = -1.0
     best_idx = -1
-    for i, s in enumerate(scores):
+    for i, score in enumerate(scores):
         if skip_indices and skip_indices(i):
             continue
-        if s > best_score:
-            best_score = s
+        if score > best_score:
+            best_score = score
             best_idx = i
     if best_idx < 0 or best_score < threshold:
         return None
@@ -36,24 +36,24 @@ def match_rule(text: str, rule: CategoryRule) -> bool:
     关键词组5：若非空，则至少包含其中一个关键词即可。
     一定不包含：文本中不能出现其中任一关键词。
     """
-    t = text.strip()
-    if not t:
+    stripped_text = text.strip()
+    if not stripped_text:
         return False
-    for kw in rule.must_not_contain:
-        if kw and kw in t:
+    for keyword in rule.must_not_contain:
+        if keyword and keyword in stripped_text:
             return False
     if rule.keyword_group_5:
-        if not any(kw and kw in t for kw in rule.keyword_group_5):
+        if not any(kw and kw in stripped_text for kw in rule.keyword_group_5):
             return False
-    groups = [
+    keyword_groups_1_4 = [
         rule.keyword_group_1,
         rule.keyword_group_2,
         rule.keyword_group_3,
         rule.keyword_group_4,
     ]
-    non_empty_groups = [g for g in groups if g]
+    non_empty_groups = [grp for grp in keyword_groups_1_4 if grp]
     if non_empty_groups:
-        if not any(all(kw in t for kw in g) for g in non_empty_groups):
+        if not any(all(kw in stripped_text for kw in grp) for grp in non_empty_groups):
             return False
     if not non_empty_groups and not rule.keyword_group_5:
         return False
@@ -62,7 +62,7 @@ def match_rule(text: str, rule: CategoryRule) -> bool:
 
 def match_store(text: str, rules: list[CategoryRule]) -> list[CategoryRule]:
     """对门店文本循环所有规则，返回匹配的规则列表（即对应的原子分类）。"""
-    return [r for r in rules if match_rule(text, r)]
+    return [rule for rule in rules if match_rule(text, rule)]
 
 
 def text_similarity(
@@ -75,11 +75,12 @@ def text_similarity(
     计算两段文本的相似度，返回值在 [0, 1]。
     默认使用 BGE 余弦 + Jaro-Winkler 组合，提高准确性（语义与字面/拼写变体兼顾）。
     """
-    from .embedding import combined_similarity, cosine_similarity_0_1, DEFAULT_BGE_WEIGHT
+    from .embedding import combined_similarity, cosine_similarity_0_1
+    from .utils.similarity import DEFAULT_BGE_WEIGHT
 
     if use_combined:
-        w = bge_weight if bge_weight is not None else DEFAULT_BGE_WEIGHT
-        return combined_similarity(text_a, text_b, bge_weight=w)
+        weight = bge_weight if bge_weight is not None else DEFAULT_BGE_WEIGHT
+        return combined_similarity(text_a, text_b, bge_weight=weight)
     return cosine_similarity_0_1(text_a, text_b)
 
 
@@ -99,13 +100,13 @@ def match_by_similarity(
     def skip_empty_brand(i: int) -> bool:
         return not (verified_brands[i].brand_name)
 
-    use_cached = any(vb.embedding is not None for vb in verified_brands)
+    use_cached = any(brand.embedding is not None for brand in verified_brands)
     if use_cached:
         from .embedding import similarity_scores_with_cached
         scores = similarity_scores_with_cached(store_text, verified_brands)
         best = _argmax_with_threshold(scores, threshold, skip_indices=skip_empty_brand)
     else:
-        scores = [text_similarity(store_text, vb.brand_name) for vb in verified_brands]
+        scores = [text_similarity(store_text, brand.brand_name) for brand in verified_brands]
         best = _argmax_with_threshold(scores, threshold, skip_indices=skip_empty_brand)
     if best is None:
         return SimilarityMatchResult(rules=[], brand=None, score=0.0)

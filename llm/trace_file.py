@@ -28,9 +28,9 @@ def _get_log_dir() -> Path | None:
         return None
 
 
-def _unescape_unicode(s: str) -> str:
+def _unescape_unicode(text: str) -> str:
     """将字符串中的 \\uXXXX 转为实际 Unicode 字符，便于日志中中文可读。"""
-    return re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), s)
+    return re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), text)
 
 
 class _FileSpanExporter:
@@ -67,18 +67,18 @@ class _FileSpanExporter:
             duration_ms = None
             if start is not None and end is not None:
                 try:
-                    ns = int(end) - int(start)
-                    duration_ms = round(ns / 1e6, 2)
+                    duration_ns = int(end) - int(start)
+                    duration_ms = round(duration_ns / 1e6, 2)
                 except (TypeError, ValueError):
                     pass
-            attrs = {}
-            for k, v in (getattr(span, "attributes", None) or {}).items():
+            attrs: dict[str, Any] = {}
+            for key, val in (getattr(span, "attributes", None) or {}).items():
                 try:
-                    if isinstance(v, str):
-                        v = _unescape_unicode(v)
-                    elif not isinstance(v, (int, float, bool)):
-                        v = _unescape_unicode(str(v))
-                    attrs[str(k)] = v
+                    if isinstance(val, str):
+                        val = _unescape_unicode(val)
+                    elif not isinstance(val, (int, float, bool)):
+                        val = _unescape_unicode(str(val))
+                    attrs[str(key)] = val
                 except Exception:
                     pass
             return {
@@ -96,6 +96,19 @@ class _FileSpanExporter:
         return True
 
 
+def _add_file_exporter_to_provider(log_dir: Path) -> None:
+    """将 _FileSpanExporter 注册到当前 tracer provider。"""
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.trace import get_tracer_provider
+
+    try:
+        provider = get_tracer_provider()
+        if hasattr(provider, "add_span_processor"):
+            provider.add_span_processor(BatchSpanProcessor(_FileSpanExporter(log_dir)))
+    except Exception as err:
+        logger.debug("Logfire 文件导出未启用: %s", err)
+
+
 def ensure_logfire_file_export() -> None:
     """
     启用 Pydantic AI 检测，不上传云端，将 trace 写入 log 目录下 logfire_traces_YYYYMMDD.jsonl。
@@ -107,23 +120,14 @@ def ensure_logfire_file_export() -> None:
             return
         try:
             import logfire
-            from opentelemetry.sdk.trace.export import BatchSpanProcessor
-            from opentelemetry.trace import get_tracer_provider
 
             log_dir = _get_log_dir()
             logfire.configure(send_to_logfire=False)
             logfire.instrument_pydantic_ai()
-
             if log_dir is not None:
-                try:
-                    provider = get_tracer_provider()
-                    if hasattr(provider, "add_span_processor"):
-                        provider.add_span_processor(BatchSpanProcessor(_FileSpanExporter(log_dir)))
-                except Exception as e:
-                    logger.debug("Logfire 文件导出未启用: %s", e)
-            _instrumented = True
+                _add_file_exporter_to_provider(log_dir)
             logger.debug("Logfire 已启用（仅本地，trace 写入 log 目录）")
-        except Exception as e:
-            logger.debug("Logfire 未启用: %s", e)
+        except Exception as err:
+            logger.debug("Logfire 未启用: %s", err)
         finally:
             _instrumented = True

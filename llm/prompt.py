@@ -71,31 +71,52 @@ def _prompt_config():
     return get_app_config().prompt
 
 
-def build_keyword_hint(rules: list[CategoryRule]) -> str:
-    """从规则中抽取少量关键词示例，用于提示词。"""
-    cfg = _prompt_config()
-    max_examples = cfg.max_keyword_examples
-    max_chars = cfg.max_keyword_hint_chars
+def _collect_keywords_from_rules(rules: list[CategoryRule], max_examples: int) -> list[str]:
+    """从规则中抽取关键词列表，最多 max_examples 个，去重。"""
     seen: set[str] = set()
     words: list[str] = []
-    for r in rules:
-        if r.atomic_category and r.atomic_category.strip() and r.atomic_category.strip() not in seen:
-            seen.add(r.atomic_category.strip())
-            words.append(r.atomic_category.strip())
-        for g in (r.keyword_group_1, r.keyword_group_2, r.keyword_group_3, r.keyword_group_4, r.keyword_group_5):
-            for kw in g:
-                if kw and kw.strip() and kw.strip() not in seen:
-                    seen.add(kw.strip())
-                    words.append(kw.strip())
+    for rule in rules:
+        atomic = (rule.atomic_category or "").strip()
+        if atomic and atomic not in seen:
+            seen.add(atomic)
+            words.append(atomic)
+        if len(words) >= max_examples:
+            break
+        for group in (
+            rule.keyword_group_1,
+            rule.keyword_group_2,
+            rule.keyword_group_3,
+            rule.keyword_group_4,
+            rule.keyword_group_5,
+        ):
+            for keyword in group:
+                if keyword:
+                    kw_stripped = keyword.strip()
+                    if kw_stripped and kw_stripped not in seen:
+                        seen.add(kw_stripped)
+                        words.append(kw_stripped)
                 if len(words) >= max_examples:
                     break
             if len(words) >= max_examples:
                 break
         if len(words) >= max_examples:
             break
+    return words[:max_examples]
+
+
+def build_keyword_hint(rules: list[CategoryRule]) -> str:
+    """从规则中抽取少量关键词示例，用于提示词。"""
+    prompt_cfg = _prompt_config()
+    max_examples = prompt_cfg.max_keyword_examples
+    max_chars = prompt_cfg.max_keyword_hint_chars
+    words = _collect_keywords_from_rules(rules, max_examples)
     if not words:
         return ""
-    s = "、".join(words[:max_examples])
-    if len(s) > max_chars:
-        s = s[:max_chars].rsplit("、", 1)[0] if "、" in s[:max_chars] else s[:max_chars]
-    return s
+    hint_text = "、".join(words)
+    if len(hint_text) > max_chars:
+        hint_text = (
+            hint_text[:max_chars].rsplit("、", 1)[0]
+            if "、" in hint_text[:max_chars]
+            else hint_text[:max_chars]
+        )
+    return hint_text
