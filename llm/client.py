@@ -1,6 +1,6 @@
 """
 大模型客户端：根据品类文本生成品类描述，支持 MCP 工具（搜索等）。
-配置从 core.config 获取；调用结果写一条 JSON 到 llm.http 日志。
+配置从 core.config 获取。可观测性由 llm.trace_file 负责（Logfire 本地 trace 文件）。
 """
 
 from __future__ import annotations
@@ -9,19 +9,19 @@ import asyncio
 import json
 import logging
 import time
-import uuid
-from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Sequence
+
+from .trace_file import ensure_logfire_file_export
 
 logger = logging.getLogger(__name__)
-HTTP_LOG_NAME = "llm.http"
 
 # 最大请求轮数（含工具调用）
 MAX_REQUEST_ROUNDS = 8
 
 
-def _http_logger() -> logging.Logger:
-    return logging.getLogger(HTTP_LOG_NAME)
+def _ensure_logfire() -> None:
+    """确保 Logfire 已启用（仅本地 trace 文件），由 trace_file 模块实现。"""
+    ensure_logfire_file_export()
 
 
 def _llm_client_config():
@@ -98,51 +98,6 @@ def _build_mcp_servers(mcp_config: list[Any]) -> list[Any]:
     return servers
 
 
-# ----- 流程日志 -----
-
-
-def _log_flow(
-    trace_id: str,
-    config: dict[str, Any],
-    result: Any,
-    start_time: float,
-    status: str,
-    error: str | None = None,
-) -> None:
-    """写单次调用的 JSON 流程日志（成功/失败统一入口）。"""
-    elapsed_ms = int((time.perf_counter() - start_time) * 1000)
-    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-    final_answer = None
-    if result is not None:
-        try:
-            u = result.usage()
-            usage["prompt_tokens"] = getattr(u, "input_tokens", 0) or 0
-            usage["completion_tokens"] = getattr(u, "output_tokens", 0) or 0
-            usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
-        except Exception:
-            pass
-        if status == "success":
-            final_answer = result.output
-    if usage.get("total_tokens", 0) == 0:
-        usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
-    try:
-        payload = {
-            "trace_id": trace_id,
-            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "config": config,
-            "metrics": {"total_latency": elapsed_ms, "total_tokens": usage.get("total_tokens", 0)},
-        }
-        if status != "success":
-            payload["status"] = status
-            if error is not None:
-                payload["error"] = error
-        if final_answer is not None:
-            payload["final_answer"] = final_answer
-        _http_logger().info("%s", json.dumps(payload, ensure_ascii=False))
-    except Exception:
-        pass
-
-
 # ----- 主调用 -----
 
 
@@ -164,11 +119,11 @@ async def _call_llm_with_mcp_async(
     from pydantic_ai.providers.openai import OpenAIProvider
     from pydantic_ai.settings import ModelSettings
 
+    _ensure_logfire()
+
     ctx_str = ",".join(f"{k}={v}" for k, v in sorted((context or {}).items()) if v is not None)
     cfg = _llm_client_config()
-    config = {"model": model, "temperature": 0, "max_tokens": cfg.max_tokens}
     start_time = time.perf_counter()
-    trace_id = f"flow_{uuid.uuid4().hex[:8]}_{datetime.now(timezone.utc).strftime('%Y')}_{uuid.uuid4().hex[:4]}"
 
     logger.info(
         "[LLM] 开始调用 | context={%s} | input=%s | model=%s | base_url=%s",
@@ -187,14 +142,11 @@ async def _call_llm_with_mcp_async(
         mcp_servers = _build_mcp_servers(mcp_config)
     except Exception as e:
         logger.exception("[LLM] MCP 服务器构建失败 | error=%s", e)
-        _log_flow(trace_id, config, None, start_time, "error", str(e))
         return None
 
     if mcp_servers:
         logger.info("[LLM] MCP 工具集 | prefixes=%s", [getattr(s, "tool_prefix", "") for s in mcp_servers])
 
-    # 文档：兼容 OpenAI 的 API 使用 OpenAIProvider(base_url=..., api_key=...) + OpenAIChatModel
-    # https://ai.pydantic.org.cn/models/openai/#兼容-openai-的模型
     model_instance = OpenAIChatModel(
         model,
         provider=OpenAIProvider(base_url=base_url.rstrip("/"), api_key=api_key),
@@ -209,27 +161,23 @@ async def _call_llm_with_mcp_async(
                 model_settings=ModelSettings(max_tokens=cfg.max_tokens, temperature=0),
             )
     except UsageLimitExceeded as e:
-        logger.warning("[LLM] 达到最大轮数 | trace_id=%s | error=%s", trace_id, e)
-        _log_flow(trace_id, config, None, start_time, "max_rounds_exceeded", str(e))
+        logger.warning("[LLM] 达到最大轮数 | error=%s", e)
         return None
     except Exception as e:
-        logger.exception("[LLM] 模型请求异常 | trace_id=%s | error=%s", trace_id, e)
-        _log_flow(trace_id, config, None, start_time, "error", str(e))
+        logger.exception("[LLM] 模型请求异常 | error=%s", e)
         return None
 
     output_text = (result.output or "").strip() if isinstance(result.output, str) else str(result.output or "").strip()
     if output_text and _is_tool_call_like_text(output_text):
-        logger.info("[LLM] 输出为工具调用文本，忽略 | trace_id=%s", trace_id)
-        _log_flow(trace_id, config, result, start_time, "no_content")
+        logger.info("[LLM] 输出为工具调用文本，忽略")
         return None
 
-    _log_flow(trace_id, config, result, start_time, "success")
+    elapsed = time.perf_counter() - start_time
     logger.info(
-        "[LLM] 成功 | trace_id=%s | len=%s | summary=%s | elapsed=%.2fs",
-        trace_id,
+        "[LLM] 成功 | len=%s | summary=%s | elapsed=%.2fs",
         len(output_text),
         _summary(output_text, cfg.log_result_summary_len),
-        (time.perf_counter() - start_time),
+        elapsed,
     )
     return output_text or None
 
