@@ -11,15 +11,26 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from models.schemas import AppConfigSchema, ConfigDisplay, LlmConfigResult
+from models.schemas import (
+    AppConfigSchema,
+    ConfigDisplay,
+    EmbeddingSection,
+    LlmConfigResult,
+    LlmClientSection,
+    MatchingSection,
+    PromptSection,
+)
 
+from . import deps as _deps
 from . import llm as _llm
 from . import loader as _loader
 from . import mcp as _mcp
 from . import paths as _paths
 
+Depends = _deps.Depends
+inject = _deps.inject
 logger = logging.getLogger(__name__)
 
 # ----- 路径（直接转发） -----
@@ -51,96 +62,133 @@ load_mcp_config = _mcp.load_mcp_config
 
 _loaded = False
 _config_dir: Path | None = None
-_llm_config_path: Path | None = None
-_mcp_config_path: Path | None = None
+_app_config_path: Path | None = None
 _llm_config: LlmConfigResult | None = None
 _mcp_config: list[Any] | None = None
 _app_config: AppConfigSchema | None = None
 
 
+def _ensure_loaded() -> None:
+    """确保配置已加载，未加载时执行一次 load_app_config()。"""
+    if not _loaded:
+        load_app_config()
+
+
 def load_app_config() -> None:
     """加载全部配置：从 config/app_config.yaml 读取并缓存。"""
-    global _loaded, _config_dir, _llm_config_path, _mcp_config_path, _llm_config, _mcp_config, _app_config
+    global _loaded, _config_dir, _app_config_path, _llm_config, _mcp_config, _app_config
 
     if _loaded:
         return
 
     _config_dir = get_config_dir_raw()
     _app_config = _loader.load_app_config_yaml()
-    _llm_config_path = get_app_config_path()
-    _mcp_config_path = get_app_config_path()
+    _app_config_path = get_app_config_path()
 
     _llm_config = load_llm_config(_app_config.llm)
-    _mcp_config = [s for s in _app_config.mcp.servers if s.name]
+    _mcp_config = [server for server in _app_config.mcp.servers if server.name]
 
     _loaded = True
     logger.debug(
         "公用配置已加载: config_dir=%s, config_file=%s",
-        _config_dir, _llm_config_path,
+        _config_dir,
+        _app_config_path,
     )
 
 
 def get_app_config() -> AppConfigSchema:
     """统一配置（app_config.yaml）；未加载时先触发 load_app_config()。"""
-    if not _loaded:
-        load_app_config()
+    _ensure_loaded()
     assert _app_config is not None
     return _app_config
 
 
 def get_config_dir() -> Path:
     """配置文件目录（config）；未加载时先触发 load_app_config()。"""
-    if not _loaded:
-        load_app_config()
+    _ensure_loaded()
     assert _config_dir is not None
     return _config_dir
 
 
 def get_llm_config_path() -> Path:
     """大模型配置文件路径（app_config.yaml）；未加载时先触发 load_app_config()。"""
-    if not _loaded:
-        load_app_config()
-    assert _llm_config_path is not None
-    return _llm_config_path
+    _ensure_loaded()
+    assert _app_config_path is not None
+    return _app_config_path
 
 
 def get_mcp_config_path() -> Path:
     """MCP 客户端配置文件路径（app_config.yaml）；未加载时先触发 load_app_config()。"""
-    if not _loaded:
-        load_app_config()
-    assert _mcp_config_path is not None
-    return _mcp_config_path
+    _ensure_loaded()
+    assert _app_config_path is not None
+    return _app_config_path
 
 
 def get_llm_config() -> LlmConfigResult:
     """大模型配置 LlmConfigResult(api_key, base_url, model)；未加载时先触发 load_app_config()。"""
-    if not _loaded:
-        load_app_config()
+    _ensure_loaded()
     assert _llm_config is not None
     return _llm_config
 
 
 def get_mcp_config() -> list[Any]:
     """MCP 客户端配置列表；未加载时先触发 load_app_config()。"""
-    if not _loaded:
-        load_app_config()
+    _ensure_loaded()
     assert _mcp_config is not None
     return _mcp_config
 
 
+# ----- 依赖注入：Annotated 类型别名（供 inject() 使用） -----
+
+AppConfig = Annotated[AppConfigSchema, Depends(get_app_config)]
+LlmConfig = Annotated[LlmConfigResult, Depends(get_llm_config)]
+McpConfigList = Annotated[list[Any], Depends(get_mcp_config)]
+ConfigDirPath = Annotated[Path, Depends(get_config_dir)]
+AppConfigFilePath = Annotated[Path, Depends(get_llm_config_path)]
+
+
+def _get_matching_config() -> MatchingSection:
+    return get_app_config().matching
+
+
+def _get_embedding_config() -> EmbeddingSection:
+    return get_app_config().embedding
+
+
+def _get_llm_client_config() -> LlmClientSection:
+    return get_app_config().llm_client
+
+
+def _get_prompt_config() -> PromptSection:
+    return get_app_config().prompt
+
+
+MatchingConfig = Annotated[MatchingSection, Depends(_get_matching_config)]
+EmbeddingConfig = Annotated[EmbeddingSection, Depends(_get_embedding_config)]
+LlmClientConfig = Annotated[LlmClientSection, Depends(_get_llm_client_config)]
+PromptConfig = Annotated[PromptSection, Depends(_get_prompt_config)]
+
+
 def get_config_display() -> dict[str, str]:
     """用于界面/日志的配置展示：base_url、model、key 脱敏。"""
-    cfg = get_llm_config()
+    llm_config = get_llm_config()
     display = ConfigDisplay(
-        base_url=cfg.base_url,
-        model=cfg.model,
-        api_key_masked=mask_key(cfg.api_key),
-        configured="是" if cfg.api_key else "否",
+        base_url=llm_config.base_url,
+        model=llm_config.model,
+        api_key_masked=mask_key(llm_config.api_key),
+        configured="是" if llm_config.api_key else "否",
     )
     return display.model_dump()
 
 
 # ----- CLI：加密 key -----
+
+
+def _parse_plain_key_from_argv() -> str:
+    """从命令行参数解析待加密的明文 API Key。"""
+    if len(sys.argv) >= 3 and sys.argv[1] == "encrypt":
+        return sys.argv[2].strip()
+    return sys.argv[1].strip()
 
 
 def main_encrypt() -> None:
@@ -149,10 +197,10 @@ def main_encrypt() -> None:
         print("用法: uv run -m core.config encrypt <明文API_Key>  或  uv run -m core.config <明文API_Key>")
         print("输出加密后的字符串，填入 config/app_config.yaml 的 llm.api_key_encrypted。")
         sys.exit(1)
-    plain = (sys.argv[2] if len(sys.argv) >= 3 and sys.argv[1] == "encrypt" else sys.argv[1]).strip()
-    enc = encrypt_key(plain)
+    plain_key = _parse_plain_key_from_argv()
+    encrypted_key = encrypt_key(plain_key)
     print("将下面一行填入 config/app_config.yaml 的 llm.api_key_encrypted：")
-    print(enc)
+    print(encrypted_key)
 
 
 __all__ = [
@@ -181,4 +229,16 @@ __all__ = [
     "get_output_dir",
     "get_log_dir",
     "normalize_input_path",
+    # 依赖注入
+    "Depends",
+    "inject",
+    "AppConfig",
+    "LlmConfig",
+    "McpConfigList",
+    "ConfigDirPath",
+    "AppConfigFilePath",
+    "MatchingConfig",
+    "EmbeddingConfig",
+    "LlmClientConfig",
+    "PromptConfig",
 ]

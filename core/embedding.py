@@ -23,8 +23,8 @@ def _normalize_cosine_to_0_1(cos: float) -> float:
 
 def _embedding_config():
     """embedding 配置（来自 app_config.yaml）；需已调用 load_app_config()。"""
-    from core.config import get_app_config
-    return get_app_config().embedding
+    from core.config import inject, EmbeddingConfig
+    return inject(EmbeddingConfig)
 
 
 def _suppress_third_party_logging() -> tuple[tuple[logging.Logger, ...], tuple[int, ...]]:

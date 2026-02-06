@@ -38,8 +38,8 @@ def _ensure_logfire() -> None:
 
 
 def _llm_client_config():
-    from core.config import get_app_config
-    return get_app_config().llm_client
+    from core.config import inject, LlmClientConfig
+    return inject(LlmClientConfig)
 
 
 def _summary(text: str, max_len: int | None = None) -> str:
@@ -157,13 +157,13 @@ def _get_agent() -> Any | None:
     with _agent_lock:
         if _agent_cache is not None:
             return _agent_cache
-        from core.config import get_llm_config, get_mcp_config
+        from core.config import inject, LlmConfig, McpConfigList
         from pydantic_ai import Agent, RunContext
         from pydantic_ai.models.openai import OpenAIChatModel
         from pydantic_ai.providers.openai import OpenAIProvider
 
-        llm_cfg = get_llm_config()
-        mcp_config = get_mcp_config()
+        llm_cfg = inject(LlmConfig)
+        mcp_config = inject(McpConfigList)
         if not llm_cfg.api_key or not mcp_config:
             return None
 
@@ -262,16 +262,16 @@ async def _call_llm_with_mcp_async(
 
 
 def _get_llm_call_params(rules: list[Any] | None) -> Any | None:
-    from core.config import get_llm_config, get_mcp_config
+    from core.config import inject, LlmConfig, McpConfigList
     from models.schemas import LlmCallParams
 
     from . import prompt as prompt_module
 
-    llm_cfg = get_llm_config()
+    llm_cfg = inject(LlmConfig)
     if not llm_cfg.api_key:
         logger.warning("未配置大模型 API Key，请配置 config/app_config.yaml 或环境变量 OPENAI_API_KEY")
         return None
-    mcp_config = get_mcp_config()
+    mcp_config = inject(McpConfigList)
     if not mcp_config:
         logger.warning("未找到 MCP 配置（app_config.yaml 的 mcp.servers）")
         return None

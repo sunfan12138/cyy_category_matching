@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 def _matching_config():
     """匹配配置（来自 app_config.yaml matching 节）；需已调用 load_app_config()。"""
-    from core.config import get_app_config
-    return get_app_config().matching
+    from core.config import inject, MatchingConfig
+    return inject(MatchingConfig)
 
 
 def match_store_categories(

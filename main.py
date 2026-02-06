@@ -32,7 +32,7 @@ from core import (
     load_rules,
     load_verified_brands,
 )
-from core.config import load_app_config, get_app_config
+from core.config import inject, load_app_config, AppConfig
 from core.models import CategoryRule, VerifiedBrand
 from models.schemas import RunConfigSchema
 
@@ -66,7 +66,7 @@ def init_config(
         无显式异常；路径不存在时仅创建 log_dir，excel/output 由后续步骤校验。
     """
     load_app_config()
-    app_cfg = get_app_config().app
+    app_cfg = inject(AppConfig).app
     _config = RunConfigSchema(
         excel_dir=excel_dir or get_excel_dir(),
         output_dir=output_dir or get_output_dir(),
@@ -87,7 +87,7 @@ def _setup_logging(log_dir: Path) -> None:
     保留 logging.log_rotate_backup_count 个历史文件。
     若已存在指向当日日志文件的 FileHandler/RotatingFileHandler 则不再添加，避免重复。
     """
-    log_cfg = get_app_config().logging
+    log_cfg = inject(AppConfig).logging
     log_dir.mkdir(parents=True, exist_ok=True)
     today = datetime.now().strftime("%Y%m%d")
     log_file = log_dir / f"category_matching_{today}.log"
@@ -204,7 +204,7 @@ def save_output(
         RuntimeError: 写入 Excel 失败。
     """
     if ignore_stem is None:
-        ignore_stem = get_app_config().app.input_stem_ignore
+        ignore_stem = inject(AppConfig).app.input_stem_ignore
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     if source_stem and source_stem != ignore_stem:
@@ -227,7 +227,7 @@ def _get_output_path(
 ) -> Path:
     """生成与 save_output 一致的结果文件路径（不写入内容）。"""
     if ignore_stem is None:
-        ignore_stem = get_app_config().app.input_stem_ignore
+        ignore_stem = inject(AppConfig).app.input_stem_ignore
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     if source_stem and source_stem != ignore_stem:
@@ -266,8 +266,8 @@ def _process_one_file(
         print(f"输入 Excel 中没有有效数据行（需有「线索编码」「线索名称」列）: {input_path}")
         return None
 
-    stem = input_path.stem if input_path.stem != get_app_config().app.input_stem_ignore else None
-    chunk_size = get_app_config().matching.batch_save_chunk_size
+    stem = input_path.stem if input_path.stem != inject(AppConfig).app.input_stem_ignore else None
+    chunk_size = inject(AppConfig).matching.batch_save_chunk_size
 
     if chunk_size <= 0 or len(items) <= chunk_size:
         # 不分块：一次性匹配并写入

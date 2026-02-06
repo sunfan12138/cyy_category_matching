@@ -32,8 +32,7 @@ def _config_dir_candidates() -> list[Path]:
 
 def get_config_dir_raw() -> Path:
     """配置文件目录（不触发加载）。"""
-    candidates = _config_dir_candidates()
-    return candidates[0] if candidates else get_base_dir() / "config"
+    return _config_dir_candidates()[0]
 
 
 def get_llm_config_path_raw() -> Path:
@@ -66,18 +65,18 @@ def get_log_dir() -> Path:
     return get_base_dir() / "logs"
 
 
-def normalize_input_path(raw: str) -> Path:
+def normalize_input_path(user_input: str) -> Path:
     """
     规范化用户输入的文件路径：去首尾引号/空白；WSL 下将 Windows 盘符路径转为可访问路径。
     例：'c:/Users/cyy/Desktop/文件.txt' -> /mnt/c/Users/cyy/Desktop/文件.txt
     """
-    s = raw.strip().strip("\"'\"''")
-    if not s:
+    path_str = user_input.strip().strip("\"'\"''")
+    if not path_str:
         return Path("")
-    if os.name == "posix" and len(s) >= 2:
-        m = re.match(r"^([a-zA-Z])\s*[:\\](.*)$", s)
-        if m:
-            drive = m.group(1).lower()
-            rest = (m.group(2) or "").replace("\\", "/").strip("/")
-            s = f"/mnt/{drive}/{rest}" if rest else f"/mnt/{drive}"
-    return Path(s)
+    if os.name == "posix" and len(path_str) >= 2:
+        match = re.match(r"^([a-zA-Z])\s*[:\\](.*)$", path_str)
+        if match:
+            drive_letter = match.group(1).lower()
+            path_after_drive = (match.group(2) or "").replace("\\", "/").strip("/")
+            path_str = f"/mnt/{drive_letter}/{path_after_drive}" if path_after_drive else f"/mnt/{drive_letter}"
+    return Path(path_str)

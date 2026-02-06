@@ -67,8 +67,8 @@ PROMPT_TOOLS = """
 
 def _prompt_config():
     """提示词配置（来自 app_config.yaml prompt 节）；需已调用 load_app_config()。"""
-    from core.config import get_app_config
-    return get_app_config().prompt
+    from core.config import inject, PromptConfig
+    return inject(PromptConfig)
 
 
 def _collect_keywords_from_rules(rules: list[CategoryRule], max_examples: int) -> list[str]:
