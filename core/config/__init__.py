@@ -3,7 +3,7 @@ core.config：整合路径、统一 YAML 配置 app_config.yaml 及加载。
 
 - 配置：config/app_config.yaml（含 llm、mcp、matching、app、embedding、llm_client、prompt）。
 - 路径：config 目录及 model/excel/output/logs（见 .paths）
-- 统一加载：load_app_config() 启动时调用一次，get_* 返回已缓存配置。
+- 统一加载：load_app_config() 启动时调用一次；配置通过 inject(Annotated 类型) 获取。
 """
 
 from __future__ import annotations
@@ -96,43 +96,31 @@ def load_app_config() -> None:
     )
 
 
-def get_app_config() -> AppConfigSchema:
-    """统一配置（app_config.yaml）；未加载时先触发 load_app_config()。"""
+def _resolve_app_config() -> AppConfigSchema:
     _ensure_loaded()
     assert _app_config is not None
     return _app_config
 
 
-def get_config_dir() -> Path:
-    """配置文件目录（config）；未加载时先触发 load_app_config()。"""
+def _resolve_config_dir() -> Path:
     _ensure_loaded()
     assert _config_dir is not None
     return _config_dir
 
 
-def get_llm_config_path() -> Path:
-    """大模型配置文件路径（app_config.yaml）；未加载时先触发 load_app_config()。"""
+def _resolve_app_config_path() -> Path:
     _ensure_loaded()
     assert _app_config_path is not None
     return _app_config_path
 
 
-def get_mcp_config_path() -> Path:
-    """MCP 客户端配置文件路径（app_config.yaml）；未加载时先触发 load_app_config()。"""
-    _ensure_loaded()
-    assert _app_config_path is not None
-    return _app_config_path
-
-
-def get_llm_config() -> LlmConfigResult:
-    """大模型配置 LlmConfigResult(api_key, base_url, model)；未加载时先触发 load_app_config()。"""
+def _resolve_llm_config() -> LlmConfigResult:
     _ensure_loaded()
     assert _llm_config is not None
     return _llm_config
 
 
-def get_mcp_config() -> list[Any]:
-    """MCP 客户端配置列表；未加载时先触发 load_app_config()。"""
+def _resolve_mcp_config() -> list[Any]:
     _ensure_loaded()
     assert _mcp_config is not None
     return _mcp_config
@@ -140,27 +128,27 @@ def get_mcp_config() -> list[Any]:
 
 # ----- 依赖注入：Annotated 类型别名（供 inject() 使用） -----
 
-AppConfig = Annotated[AppConfigSchema, Depends(get_app_config)]
-LlmConfig = Annotated[LlmConfigResult, Depends(get_llm_config)]
-McpConfigList = Annotated[list[Any], Depends(get_mcp_config)]
-ConfigDirPath = Annotated[Path, Depends(get_config_dir)]
-AppConfigFilePath = Annotated[Path, Depends(get_llm_config_path)]
+AppConfig = Annotated[AppConfigSchema, Depends(_resolve_app_config)]
+LlmConfig = Annotated[LlmConfigResult, Depends(_resolve_llm_config)]
+McpConfigList = Annotated[list[Any], Depends(_resolve_mcp_config)]
+ConfigDirPath = Annotated[Path, Depends(_resolve_config_dir)]
+AppConfigFilePath = Annotated[Path, Depends(_resolve_app_config_path)]
 
 
 def _get_matching_config() -> MatchingSection:
-    return get_app_config().matching
+    return _resolve_app_config().matching
 
 
 def _get_embedding_config() -> EmbeddingSection:
-    return get_app_config().embedding
+    return _resolve_app_config().embedding
 
 
 def _get_llm_client_config() -> LlmClientSection:
-    return get_app_config().llm_client
+    return _resolve_app_config().llm_client
 
 
 def _get_prompt_config() -> PromptSection:
-    return get_app_config().prompt
+    return _resolve_app_config().prompt
 
 
 MatchingConfig = Annotated[MatchingSection, Depends(_get_matching_config)]
@@ -171,7 +159,7 @@ PromptConfig = Annotated[PromptSection, Depends(_get_prompt_config)]
 
 def get_config_display() -> dict[str, str]:
     """用于界面/日志的配置展示：base_url、model、key 脱敏。"""
-    llm_config = get_llm_config()
+    llm_config = inject(LlmConfig)
     display = ConfigDisplay(
         base_url=llm_config.base_url,
         model=llm_config.model,
@@ -205,14 +193,8 @@ def main_encrypt() -> None:
 
 __all__ = [
     "load_app_config",
-    "get_app_config",
-    "get_config_dir",
     "get_config_dir_raw",
-    "get_llm_config",
-    "get_llm_config_path",
     "get_llm_config_path_raw",
-    "get_mcp_config",
-    "get_mcp_config_path",
     "get_mcp_config_path_raw",
     "get_config_display",
     "load_llm_config",
@@ -229,7 +211,6 @@ __all__ = [
     "get_output_dir",
     "get_log_dir",
     "normalize_input_path",
-    # 依赖注入
     "Depends",
     "inject",
     "AppConfig",

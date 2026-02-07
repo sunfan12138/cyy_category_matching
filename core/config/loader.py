@@ -17,7 +17,7 @@ from . import paths as _paths
 
 logger = logging.getLogger(__name__)
 
-APP_CONFIG_FILENAME = "app_config.yaml"
+APP_CONFIG_FILENAME = _paths.APP_CONFIG_FILENAME
 _ENV_PLACEHOLDER = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 

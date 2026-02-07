@@ -30,19 +30,27 @@ def _config_dir_candidates() -> list[Path]:
     return [get_base_dir() / "config"]
 
 
+APP_CONFIG_FILENAME = "app_config.yaml"
+
+
 def get_config_dir_raw() -> Path:
     """配置文件目录（不触发加载）。"""
     return _config_dir_candidates()[0]
 
 
+def _app_config_path_raw() -> Path:
+    """app_config.yaml 路径（不触发加载）；LLM 与 MCP 共用该文件。"""
+    return get_config_dir_raw() / APP_CONFIG_FILENAME
+
+
 def get_llm_config_path_raw() -> Path:
     """大模型配置所在文件路径（app_config.yaml，不触发加载）。"""
-    return get_config_dir_raw() / "app_config.yaml"
+    return _app_config_path_raw()
 
 
 def get_mcp_config_path_raw() -> Path:
     """MCP 客户端配置所在文件路径（app_config.yaml，不触发加载）。"""
-    return get_config_dir_raw() / "app_config.yaml"
+    return _app_config_path_raw()
 
 
 def get_model_dir() -> Path:
@@ -80,3 +88,16 @@ def normalize_input_path(user_input: str) -> Path:
             path_after_drive = (match.group(2) or "").replace("\\", "/").strip("/")
             path_str = f"/mnt/{drive_letter}/{path_after_drive}" if path_after_drive else f"/mnt/{drive_letter}"
     return Path(path_str)
+
+
+__all__ = [
+    "get_base_dir",
+    "get_config_dir_raw",
+    "get_llm_config_path_raw",
+    "get_mcp_config_path_raw",
+    "get_model_dir",
+    "get_excel_dir",
+    "get_output_dir",
+    "get_log_dir",
+    "normalize_input_path",
+]
