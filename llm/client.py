@@ -9,7 +9,6 @@ MCP 用法参见 https://ai.pydantic.org.cn/mcp/client/
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import threading
 import time
@@ -58,22 +57,6 @@ def _mask_base_url(url: str) -> str:
             host_part = url_stripped[len(prefix):].split("/")[0].split("?")[0]
             return prefix + host_part
     return "(无效)"
-
-
-def _is_tool_call_like_text(text: str) -> bool:
-    """若输出形如工具调用（如 </tool_call> 或 {"name":..., "arguments":...}），不当作最终答案。"""
-    stripped = (text or "").strip()
-    if not stripped:
-        return False
-    if "</tool_call>" in stripped:
-        return True
-    if stripped.startswith("{") and '"name"' in stripped and '"arguments"' in stripped:
-        try:
-            json.loads(stripped.split("\n")[0].strip().rstrip("</tool_call>").strip())
-            return True
-        except Exception:
-            pass
-    return False
 
 
 # ----- MCP 服务器构建 -----
@@ -244,9 +227,7 @@ async def _call_llm_with_mcp_async(
         return None
 
     output_text = (result.output or "").strip() if isinstance(result.output, str) else str(result.output or "").strip()
-    if output_text and _is_tool_call_like_text(output_text):
-        logger.info("[LLM] 输出为工具调用文本，忽略")
-        return None
+    # Pydantic AI 会在内部执行工具调用并继续对话，run() 正常结束时 result.output 为最终文本，无需再判工具调用格式
 
     elapsed = time.perf_counter() - start_time
     logger.info(
