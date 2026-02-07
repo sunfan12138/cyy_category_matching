@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 def _matching_config():
     """匹配配置（来自 app_config.yaml matching 节）；需已调用 load_app_config()。"""
-    from core.config import get_app_config
-    return get_app_config().matching
+    from core.config import inject, MatchingConfig
+    return inject(MatchingConfig)
 
 
 def match_store_categories(
@@ -68,32 +68,31 @@ def match_store_categories(
             "item": store_text[:50] + ("..." if len(store_text) > 50 else ""),
         },
     )
-    if desc:
-        if desc.strip() in mc.llm_unmatched_aliases:
-            return MatchStoreResult(
-                matched_rules=sim_result.rules,
-                from_similarity=True,
-                ref_brand=sim_result.brand,
-                score=sim_result.score,
-                llm_desc=mc.llm_unmatched_marker,
-            )
-        rule_matched = match_store(desc.strip(), rules)
-        if rule_matched:
-            return MatchStoreResult(matched_rules=rule_matched, from_similarity=False, llm_desc=desc)
+    if not desc:
         return MatchStoreResult(
             matched_rules=sim_result.rules,
             from_similarity=True,
             ref_brand=sim_result.brand,
             score=sim_result.score,
-            llm_desc=desc,
+            llm_desc="大模型无有效返回（无内容且无 tool_calls）",
         )
-    # 无内容且无 tool_calls 时仍输出相似度匹配结果，但标记为「搜索后未匹配」
+    if desc.strip() in mc.llm_unmatched_aliases:
+        return MatchStoreResult(
+            matched_rules=sim_result.rules,
+            from_similarity=True,
+            ref_brand=sim_result.brand,
+            score=sim_result.score,
+            llm_desc=mc.llm_unmatched_marker,
+        )
+    rule_matched = match_store(desc.strip(), rules)
+    if rule_matched:
+        return MatchStoreResult(matched_rules=rule_matched, from_similarity=False, llm_desc=desc)
     return MatchStoreResult(
         matched_rules=sim_result.rules,
         from_similarity=True,
         ref_brand=sim_result.brand,
         score=sim_result.score,
-        llm_desc="大模型无有效返回（无内容且无 tool_calls）",
+        llm_desc=desc,
     )
 
 
@@ -137,39 +136,37 @@ async def match_store_categories_async(
             "item": store_text[:50] + ("..." if len(store_text) > 50 else ""),
         },
     )
-    if desc:
-        if desc.strip() in mc.llm_unmatched_aliases:
-            return MatchStoreResult(
-                matched_rules=sim_result.rules,
-                from_similarity=True,
-                ref_brand=sim_result.brand,
-                score=sim_result.score,
-                llm_desc=mc.llm_unmatched_marker,
-            )
-        rule_matched = match_store(desc.strip(), rules)
-        if rule_matched:
-            return MatchStoreResult(matched_rules=rule_matched, from_similarity=False, llm_desc=desc)
+    if not desc:
         return MatchStoreResult(
             matched_rules=sim_result.rules,
             from_similarity=True,
             ref_brand=sim_result.brand,
             score=sim_result.score,
-            llm_desc=desc,
+            llm_desc="大模型无有效返回（无内容且无 tool_calls）",
         )
-    # 无内容且无 tool_calls 时仍输出相似度匹配结果，但标记为「搜索后未匹配」
+    if desc.strip() in mc.llm_unmatched_aliases:
+        return MatchStoreResult(
+            matched_rules=sim_result.rules,
+            from_similarity=True,
+            ref_brand=sim_result.brand,
+            score=sim_result.score,
+            llm_desc=mc.llm_unmatched_marker,
+        )
+    rule_matched = match_store(desc.strip(), rules)
+    if rule_matched:
+        return MatchStoreResult(matched_rules=rule_matched, from_similarity=False, llm_desc=desc)
     return MatchStoreResult(
         matched_rules=sim_result.rules,
         from_similarity=True,
         ref_brand=sim_result.brand,
         score=sim_result.score,
-        llm_desc="大模型无有效返回（无内容且无 tool_calls）",
+        llm_desc=desc,
     )
 
 
 def _build_result_row(lead_code: str, lead_name: str, out: MatchStoreResult) -> ResultRow:
     """根据单条匹配结果构建 11 列 ResultRow（相似度拆为 品牌/编码/原子品类/相似度 四列）。"""
     matched = out.matched_rules
-    mc = _matching_config()
     llm_desc = out.llm_desc or ""
     if not matched:
         return (
@@ -185,14 +182,8 @@ def _build_result_row(lead_code: str, lead_name: str, out: MatchStoreResult) -> 
             "",
             llm_desc,
         )
-    if llm_desc and llm_desc.strip() in mc.llm_unmatched_aliases:
-        method = "未搜索到"
-    elif llm_desc and not out.from_similarity:
-        method = "搜索后匹配"
-    elif llm_desc and out.from_similarity:
-        method = "搜索后未匹配"
-    else:
-        method = "相似度" if out.from_similarity else "规则"
+    mc = _matching_config()
+    method = _match_method_label(out, llm_desc, mc.llm_unmatched_aliases)
     ref_brand = out.ref_brand
     sim_brand = (ref_brand.brand_name or "").strip() if ref_brand else ""
     sim_code = str(ref_brand.brand_code) if ref_brand else ""
@@ -220,6 +211,17 @@ def _build_result_row(lead_code: str, lead_name: str, out: MatchStoreResult) -> 
         score_str,
         llm_desc,
     )
+
+
+def _match_method_label(out: MatchStoreResult, llm_desc: str, llm_unmatched_aliases: list[str]) -> str:
+    """根据匹配结果与 LLM 描述返回匹配方式标签。"""
+    if not llm_desc:
+        return "相似度" if out.from_similarity else "规则"
+    if llm_desc.strip() in llm_unmatched_aliases:
+        return "未搜索到"
+    if not out.from_similarity:
+        return "搜索后匹配"
+    return "搜索后未匹配"
 
 
 async def _match_one_with_sem(
@@ -273,8 +275,8 @@ async def run_batch_match_async(
     for (lead_code, lead_name), out in raw_results:
         if out is None:
             completed[(lead_code, lead_name)] = _build_exception_result_row(lead_code, lead_name)
-        else:
-            completed[(lead_code, lead_name)] = _build_result_row(lead_code, lead_name, out)
+            continue
+        completed[(lead_code, lead_name)] = _build_result_row(lead_code, lead_name, out)
     return [completed[item] for item in items]
 
 

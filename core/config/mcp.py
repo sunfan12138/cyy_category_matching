@@ -22,14 +22,9 @@ def load_mcp_config(config_path: Path | None) -> list[ServerConfig]:
     if not config_path or not config_path.exists():
         return []
     try:
-        raw = config_path.read_text(encoding="utf-8")
-        data = json.loads(raw)
-        cfg = McpConfigSchema.model_validate(data)
+        file_content = config_path.read_text(encoding="utf-8")
+        parsed_json = json.loads(file_content)
+        mcp_config_schema = McpConfigSchema.model_validate(parsed_json)
+        return [server for server in mcp_config_schema.servers if server.name]
     except (ValidationError, json.JSONDecodeError):
         return []
-    out: list[ServerConfig] = []
-    for s in cfg.servers:
-        if not s.name:
-            continue
-        out.append(s)
-    return out

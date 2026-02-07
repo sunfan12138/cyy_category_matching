@@ -30,9 +30,9 @@ def _main_encrypt() -> None:
         print("用法: uv run -m llm.llm_config <明文API_Key>")
         print("输出加密后的字符串，填入 app_config.yaml 的 llm.api_key_encrypted。")
         sys.exit(1)
-    enc = encrypt_key(sys.argv[1].strip())
+    encrypted_key = encrypt_key(sys.argv[1].strip())
     print("将下面一行填入 app_config.yaml 的 llm.api_key_encrypted：")
-    print(enc)
+    print(encrypted_key)
 
 
 if __name__ == "__main__":

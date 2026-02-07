@@ -129,12 +129,12 @@ def load_verified_brands(excel_path: str | Path) -> list[VerifiedBrand]:
             return []
         header_row = next(ws.iter_rows(min_row=1, max_row=1, min_col=1, max_col=max_col, values_only=True))
         header = [cell_value(v) for v in (header_row or [])]
-        col_code = _find_column(header, ("品牌编码",))
         col_name = _find_column(header, ("品牌名称",))
-        col_keywords = _find_column(header, ("品牌关键词（，表示同时包含）",))
         col_atomic = _find_column(header, ("原子品类",))
         if col_name is None or col_atomic is None:
             return []
+        col_code = _find_column(header, ("品牌编码",))
+        col_keywords = _find_column(header, ("品牌关键词（，表示同时包含）",))
         result: list[VerifiedBrand] = []
         data_rows = ws.iter_rows(min_row=2, max_row=max_row, min_col=1, max_col=max_col, values_only=True)
         for row_tuple in tqdm(data_rows, total=max_row - 1, desc="解析已校验品牌", unit="行"):
