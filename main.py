@@ -96,19 +96,18 @@ def _setup_logging(log_dir: Path) -> None:
     root.setLevel(logging.INFO)
     for h in root.handlers:
         if isinstance(h, (logging.FileHandler, RotatingFileHandler)) and getattr(h, "baseFilename", "") == log_path:
-            break
-    else:
-        fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-        handler = RotatingFileHandler(
-            log_file,
-            mode="a",
-            encoding="utf-8",
-            maxBytes=log_cfg.log_rotate_max_bytes,
-            backupCount=log_cfg.log_rotate_backup_count,
-        )
-        handler.setFormatter(logging.Formatter(fmt))
-        root.addHandler(handler)
-    # 屏蔽 httpx 的 HTTP Request/Response INFO 日志，避免刷屏
+            logging.getLogger("httpx").setLevel(logging.WARNING)
+            return
+    fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    handler = RotatingFileHandler(
+        log_file,
+        mode="a",
+        encoding="utf-8",
+        maxBytes=log_cfg.log_rotate_max_bytes,
+        backupCount=log_cfg.log_rotate_backup_count,
+    )
+    handler.setFormatter(logging.Formatter(fmt))
+    root.addHandler(handler)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
@@ -142,15 +141,14 @@ def load_data(
     if not rules:
         print(f"规则文件为空或未解析到有效规则: {rules_path}")
 
-    if not verified_path.exists():
-        print(f"已校验品牌文件不存在，将使用空列表: {verified_path}")
-        verified_brands: list[VerifiedBrand] = []
-    else:
+    verified_brands: list[VerifiedBrand] = []
+    if verified_path.exists():
         try:
             verified_brands = load_verified_brands(verified_path)
         except Exception as e:
             print(f"加载已校验品牌文件失败，将使用空列表: {e}")
-            verified_brands = []
+    else:
+        print(f"已校验品牌文件不存在，将使用空列表: {verified_path}")
 
     print(f"规则 {len(rules)} 条，已校验品牌 {len(verified_brands)} 条。")
     return rules, verified_brands
@@ -203,14 +201,10 @@ def save_output(
     Raises:
         RuntimeError: 写入 Excel 失败。
     """
-    if ignore_stem is None:
-        ignore_stem = inject(AppConfig).app.input_stem_ignore
+    ignore = ignore_stem if ignore_stem is not None else inject(AppConfig).app.input_stem_ignore
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    if source_stem and source_stem != ignore_stem:
-        output_filename = f"{source_stem}_匹配结果_{stamp}.xlsx"
-    else:
-        output_filename = f"匹配结果_{stamp}.xlsx"
+    output_filename = f"{source_stem}_匹配结果_{stamp}.xlsx" if (source_stem and source_stem != ignore) else f"匹配结果_{stamp}.xlsx"
     output_path = output_dir / output_filename
     try:
         write_result_excel(result_rows, output_path)
@@ -226,14 +220,10 @@ def _get_output_path(
     ignore_stem: str | None = None,
 ) -> Path:
     """生成与 save_output 一致的结果文件路径（不写入内容）。"""
-    if ignore_stem is None:
-        ignore_stem = inject(AppConfig).app.input_stem_ignore
+    ignore = ignore_stem if ignore_stem is not None else inject(AppConfig).app.input_stem_ignore
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    if source_stem and source_stem != ignore_stem:
-        output_filename = f"{source_stem}_匹配结果_{stamp}.xlsx"
-    else:
-        output_filename = f"匹配结果_{stamp}.xlsx"
+    output_filename = f"{source_stem}_匹配结果_{stamp}.xlsx" if (source_stem and source_stem != ignore) else f"匹配结果_{stamp}.xlsx"
     return output_dir / output_filename
 
 
@@ -246,52 +236,44 @@ def _ensure_model_and_embeddings(
         fill_brand_embeddings(verified_brands)
 
 
-def _process_one_file(
-    input_path: Path,
+def _process_one_file_no_chunk(
     config: RunConfigSchema,
     rules: list[CategoryRule],
     verified_brands: list[VerifiedBrand],
+    items: list[tuple[str, str]],
+    stem: str | None,
 ) -> Path | None:
-    """
-    处理单个品类文件：读取品类列表 -> 匹配 -> 写结果。
-    返回结果文件路径；读取或匹配失败时返回 None 并已打日志。
-    """
+    """不分块：一次性匹配并写入。"""
+    print(f"总条数: {len(items)} 条，开始匹配…")
     try:
-        items = read_categories_from_file(input_path)
-    except Exception as e:
-        print(f"读取文件失败 {input_path}: {e}")
+        result_rows = run_matching(items, rules, verified_brands)
+    except RuntimeError as e:
+        logger.exception("批量匹配失败")
+        print(f"批量匹配失败: {e}")
+        if e.__cause__:
+            print(f"  原因: {e.__cause__}")
         return None
-
-    if not items:
-        print(f"输入 Excel 中没有有效数据行（需有「线索编码」「线索名称」列）: {input_path}")
+    unmatched = sum(1 for r in result_rows if r[5] not in MATCH_SUCCESS_METHODS)
+    print(f"匹配成功 {len(result_rows) - unmatched} 条，匹配失败 {unmatched} 条（已标红）。")
+    try:
+        out_path = save_output(result_rows, config.output_dir, source_stem=stem)
+    except RuntimeError as e:
+        logger.exception("写入结果失败")
+        print(f"写入结果失败: {e}")
         return None
+    print(f"已写入: {out_path}")
+    return out_path
 
-    stem = input_path.stem if input_path.stem != inject(AppConfig).app.input_stem_ignore else None
-    chunk_size = inject(AppConfig).matching.batch_save_chunk_size
 
-    if chunk_size <= 0 or len(items) <= chunk_size:
-        # 不分块：一次性匹配并写入
-        print(f"总条数: {len(items)} 条，开始匹配…")
-        try:
-            result_rows = run_matching(items, rules, verified_brands)
-        except RuntimeError as e:
-            logger.exception("批量匹配失败")
-            print(f"批量匹配失败: {e}")
-            if e.__cause__:
-                print(f"  原因: {e.__cause__}")
-            return None
-        unmatched = sum(1 for r in result_rows if r[5] not in MATCH_SUCCESS_METHODS)
-        print(f"匹配成功 {len(result_rows) - unmatched} 条，匹配失败 {unmatched} 条（已标红）。")
-        try:
-            out_path = save_output(result_rows, config.output_dir, source_stem=stem)
-        except RuntimeError as e:
-            logger.exception("写入结果失败")
-            print(f"写入结果失败: {e}")
-            return None
-        print(f"已写入: {out_path}")
-        return out_path
-
-    # 分块处理：每 chunk_size 条匹配一次并追加写入，每次保存后关闭文件，便于运行中打开查看
+def _process_one_file_chunked(
+    config: RunConfigSchema,
+    rules: list[CategoryRule],
+    verified_brands: list[VerifiedBrand],
+    items: list[tuple[str, str]],
+    stem: str | None,
+    chunk_size: int,
+) -> Path | None:
+    """分块处理：每 chunk_size 条匹配一次并追加写入。"""
     try:
         output_path = _get_output_path(config.output_dir, source_stem=stem)
         start_result_excel(output_path)
@@ -318,14 +300,42 @@ def _process_one_file(
             total_ok += sum(1 for r in chunk_results if r[5] in MATCH_SUCCESS_METHODS)
             total_fail += sum(1 for r in chunk_results if r[5] not in MATCH_SUCCESS_METHODS)
             processed = start + len(chunk_results)
-            pct = 100.0 * processed / len(items)
-            print(f"总进度: {processed}/{len(items)} ({pct:.1f}%)")
+            print(f"总进度: {processed}/{len(items)} ({100.0 * processed / len(items):.1f}%)")
         print(f"匹配成功 {total_ok} 条，匹配失败 {total_fail} 条（已标红）。")
     except Exception as e:
         logger.exception("分块写入失败")
         print(f"分块写入失败: {e}")
     print(f"已写入: {output_path}")
     return output_path
+
+
+def _process_one_file(
+    input_path: Path,
+    config: RunConfigSchema,
+    rules: list[CategoryRule],
+    verified_brands: list[VerifiedBrand],
+) -> Path | None:
+    """
+    处理单个品类文件：读取品类列表 -> 匹配 -> 写结果。
+    返回结果文件路径；读取或匹配失败时返回 None 并已打日志。
+    """
+    try:
+        items = read_categories_from_file(input_path)
+    except Exception as e:
+        print(f"读取文件失败 {input_path}: {e}")
+        return None
+
+    if not items:
+        print(f"输入 Excel 中没有有效数据行（需有「线索编码」「线索名称」列）: {input_path}")
+        return None
+
+    stem = input_path.stem if input_path.stem != inject(AppConfig).app.input_stem_ignore else None
+    chunk_size = inject(AppConfig).matching.batch_save_chunk_size
+
+    if chunk_size <= 0 or len(items) <= chunk_size:
+        return _process_one_file_no_chunk(config, rules, verified_brands, items, stem)
+
+    return _process_one_file_chunked(config, rules, verified_brands, items, stem, chunk_size)
 
 
 def _parse_args(args: list[str] | None = None) -> argparse.Namespace:
@@ -369,12 +379,10 @@ def main(args: list[str] | None = None) -> None:
     if not parsed.no_loop or not parsed.input_file:
         print("请拖动或输入待匹配 Excel 文件路径（需含「线索编码」「线索名称」列），输入 q 退出。\n")
 
-    pending_path: str | None = parsed.input_file.strip() if parsed.input_file else None
-    if pending_path:
-        pending_path = pending_path.strip()
+    pending_path: str | None = (parsed.input_file or "").strip() or None
 
     while True:
-        file_path_str = pending_path if pending_path else input("文件路径: ").strip()
+        file_path_str = pending_path or input("文件路径: ").strip()
         pending_path = None
 
         if not file_path_str:

@@ -18,16 +18,15 @@ _DEFAULT_MODEL = "qwen-plus"
 def _resolve_api_key(schema: LlmConfigSchema, base_url: str, model: str) -> str | None:
     """从 schema 解析出 api_key：优先明文，否则解密 api_key_encrypted。"""
     if schema.api_key and schema.api_key.strip():
-        api_key = schema.api_key.strip()
         logger.info("大模型配置已加载（api_key），base_url=%s, model=%s", base_url, model)
-        return api_key
-    if schema.api_key_encrypted and schema.api_key_encrypted.strip():
-        decrypted_key = decrypt_key(schema.api_key_encrypted.strip())
-        if decrypted_key:
-            logger.info("大模型配置已加载（api_key_encrypted 解密成功），base_url=%s, model=%s", base_url, model)
-            return decrypted_key
-        logger.warning("api_key_encrypted 解密失败，请确认使用 uv run -m core.config <明文key> 生成")
+        return schema.api_key.strip()
+    if not (schema.api_key_encrypted and schema.api_key_encrypted.strip()):
         return None
+    decrypted_key = decrypt_key(schema.api_key_encrypted.strip())
+    if decrypted_key:
+        logger.info("大模型配置已加载（api_key_encrypted 解密成功），base_url=%s, model=%s", base_url, model)
+        return decrypted_key
+    logger.warning("api_key_encrypted 解密失败，请确认使用 uv run -m core.config <明文key> 生成")
     return None
 
 

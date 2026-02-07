@@ -53,25 +53,26 @@ def _restore_logging(
 def _get_model():
     """懒加载 BGE 模型：通过 modelscope 下载到 model 目录，再用 sentence-transformers 加载。"""
     global _model
-    if _model is None:
-        from modelscope import snapshot_download  # type: ignore[import-untyped]
-        from sentence_transformers import SentenceTransformer  # type: ignore[import-untyped]
+    if _model is not None:
+        return _model
+    from modelscope import snapshot_download  # type: ignore[import-untyped]
+    from sentence_transformers import SentenceTransformer  # type: ignore[import-untyped]
 
-        from paths import get_model_dir
+    from paths import get_model_dir
 
-        model_id = _embedding_config().bge_model_id
-        loggers, old_levels = _suppress_third_party_logging()
-        try:
-            model_dir = get_model_dir()
-            model_dir.mkdir(parents=True, exist_ok=True)
-            local_dir = snapshot_download(
-                model_id,
-                cache_dir=str(model_dir),
-                progress_callbacks=[],
-            )
-            _model = SentenceTransformer(local_dir)
-        finally:
-            _restore_logging(loggers, old_levels)
+    model_id = _embedding_config().bge_model_id
+    loggers, old_levels = _suppress_third_party_logging()
+    try:
+        model_dir = get_model_dir()
+        model_dir.mkdir(parents=True, exist_ok=True)
+        local_dir = snapshot_download(
+            model_id,
+            cache_dir=str(model_dir),
+            progress_callbacks=[],
+        )
+        _model = SentenceTransformer(local_dir)
+    finally:
+        _restore_logging(loggers, old_levels)
     return _model
 
 
@@ -106,8 +107,7 @@ def cosine_similarity(text_a: str, text_b: str) -> float:
     """
     if not text_a.strip() or not text_b.strip():
         return 0.0
-    model = _get_model()
-    emb = model.encode([text_a, text_b], normalize_embeddings=True)
+    emb = _get_model().encode([text_a, text_b], normalize_embeddings=True)
     return float(emb[0] @ emb[1])
 
 
@@ -217,8 +217,7 @@ def similarity_scores_with_cached(
     bge_scores = _compute_bge_scores_for_brands(query_embedding, verified_brands)
     if not use_combined:
         return bge_scores
-    if bge_weight is None:
-        bge_weight = _embedding_config().bge_weight
+    weight = bge_weight if bge_weight is not None else _embedding_config().bge_weight
     return _compute_combined_scores_for_brands(
-        query.strip(), verified_brands, bge_scores, bge_weight
+        query.strip(), verified_brands, bge_scores, weight
     )

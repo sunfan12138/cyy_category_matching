@@ -131,6 +131,40 @@ _agent_cache: Any = None
 _agent_lock = threading.Lock()
 
 
+def _create_agent(llm_cfg: Any, mcp_config: list[Any]) -> Any | None:
+    """根据配置创建 Agent 实例；MCP 构建失败时返回 None。"""
+    _ensure_logfire()
+    try:
+        mcp_servers = _build_mcp_servers(mcp_config)
+    except Exception as err:
+        logger.exception("[LLM] MCP 服务器构建失败 | error=%s", err)
+        return None
+    from pydantic_ai import Agent, RunContext
+    from pydantic_ai.models.openai import OpenAIChatModel
+    from pydantic_ai.providers.openai import OpenAIProvider
+
+    model = OpenAIChatModel(
+        llm_cfg.model,
+        provider=OpenAIProvider(base_url=llm_cfg.base_url.rstrip("/"), api_key=llm_cfg.api_key),
+    )
+    agent = Agent(
+        model,
+        instructions=PROMPT_BASE + "\n\n" + PROMPT_TOOLS,
+        toolsets=mcp_servers,
+        deps_type=RunDeps,
+    )
+
+    @agent.instructions
+    def _add_reference_keywords(ctx: RunContext[RunDeps]) -> str:
+        if not ctx.deps.reference_keywords:
+            return ""
+        return "\n\n## 参考词汇\n\n可优先选用：" + ctx.deps.reference_keywords + "\n"
+
+    if mcp_servers:
+        logger.info("[LLM] MCP 工具集 | prefixes=%s", [getattr(srv, "tool_prefix", "") for srv in mcp_servers])
+    return agent
+
+
 def _get_agent() -> Any | None:
     """
     获取或创建全局 Agent 实例（仅创建一次，后续复用）。
@@ -141,43 +175,14 @@ def _get_agent() -> Any | None:
         if _agent_cache is not None:
             return _agent_cache
         from core.config import inject, LlmConfig, McpConfigList
-        from pydantic_ai import Agent, RunContext
-        from pydantic_ai.models.openai import OpenAIChatModel
-        from pydantic_ai.providers.openai import OpenAIProvider
 
         llm_cfg = inject(LlmConfig)
         mcp_config = inject(McpConfigList)
         if not llm_cfg.api_key or not mcp_config:
             return None
-
-        _ensure_logfire()
-        try:
-            mcp_servers = _build_mcp_servers(mcp_config)
-        except Exception as err:
-            logger.exception("[LLM] MCP 服务器构建失败 | error=%s", err)
-            return None
-
-        model = OpenAIChatModel(
-            llm_cfg.model,
-            provider=OpenAIProvider(base_url=llm_cfg.base_url.rstrip("/"), api_key=llm_cfg.api_key),
-        )
-        static_instructions = PROMPT_BASE + "\n\n" + PROMPT_TOOLS
-        agent = Agent(
-            model,
-            instructions=static_instructions,
-            toolsets=mcp_servers,
-            deps_type=RunDeps,
-        )
-
-        @agent.instructions
-        def _add_reference_keywords(ctx: RunContext[RunDeps]) -> str:
-            if not ctx.deps.reference_keywords:
-                return ""
-            return "\n\n## 参考词汇\n\n可优先选用：" + ctx.deps.reference_keywords + "\n"
-
-        if mcp_servers:
-            logger.info("[LLM] MCP 工具集 | prefixes=%s", [getattr(srv, "tool_prefix", "") for srv in mcp_servers])
-        _agent_cache = agent
+        agent = _create_agent(llm_cfg, mcp_config)
+        if agent is not None:
+            _agent_cache = agent
         return agent
 
 

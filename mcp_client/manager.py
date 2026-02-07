@@ -80,14 +80,11 @@ class MCPClientManager:
         列出工具。若 server_name 为 None，则聚合所有服务器的工具。
         返回 [(server_name, tool), ...]，tool 为 MCP Tool 对象。
         """
-        if server_name:
-            names = [server_name] if server_name in self._sessions else []
-        else:
-            names = list(self._sessions.keys())
+        names = list(self._sessions.keys()) if server_name is None else ([server_name] if server_name in self._sessions else [])
         out: list[tuple[str, Any]] = []
         for name in names:
             session = self._sessions.get(name)
-            if not session:
+            if session is None:
                 continue
             try:
                 result = await session.list_tools()
@@ -107,7 +104,7 @@ class MCPClientManager:
         调用指定服务器的工具。返回 CallToolResult（含 content / is_error 等）。
         """
         session = self._sessions.get(server_name)
-        if not session:
+        if session is None:
             raise ValueError(f"未知服务器: {server_name}")
         return await session.call_tool(tool_name, arguments or {})
 

@@ -107,16 +107,12 @@ def _collect_keywords_from_rules(rules: list[CategoryRule], max_examples: int) -
 def build_keyword_hint(rules: list[CategoryRule]) -> str:
     """从规则中抽取少量关键词示例，用于提示词。"""
     prompt_cfg = _prompt_config()
-    max_examples = prompt_cfg.max_keyword_examples
-    max_chars = prompt_cfg.max_keyword_hint_chars
-    words = _collect_keywords_from_rules(rules, max_examples)
+    words = _collect_keywords_from_rules(rules, prompt_cfg.max_keyword_examples)
     if not words:
         return ""
     hint_text = "、".join(words)
-    if len(hint_text) > max_chars:
-        hint_text = (
-            hint_text[:max_chars].rsplit("、", 1)[0]
-            if "、" in hint_text[:max_chars]
-            else hint_text[:max_chars]
-        )
-    return hint_text
+    max_chars = prompt_cfg.max_keyword_hint_chars
+    if len(hint_text) <= max_chars:
+        return hint_text
+    truncated = hint_text[:max_chars]
+    return truncated.rsplit("、", 1)[0] if "、" in truncated else truncated

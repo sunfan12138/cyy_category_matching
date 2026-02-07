@@ -1,6 +1,7 @@
 """文件读写：从 Excel 读取线索（编码+名称）、匹配结果写入 Excel。"""
 
 from pathlib import Path
+from typing import Any
 
 import openpyxl
 from openpyxl.styles import Font
@@ -61,10 +62,10 @@ def read_categories_from_file(file_path: Path) -> list[tuple[str, str]]:
             return []
         header_row = next(ws.iter_rows(min_row=1, max_row=1, min_col=1, max_col=max_col, values_only=True))
         header = [cell_value(v) for v in (header_row or [])]
-        col_code = _find_column(header, (INPUT_LEAD_CODE_COL,))
         col_name = _find_column(header, (INPUT_LEAD_NAME_COL,))
         if col_name is None:
             raise RuntimeError(f"输入 Excel 缺少列「{INPUT_LEAD_NAME_COL}」")
+        col_code = _find_column(header, (INPUT_LEAD_CODE_COL,))
         if col_code is None:
             raise RuntimeError(f"输入 Excel 缺少列「{INPUT_LEAD_CODE_COL}」")
         result: list[tuple[str, str]] = []
@@ -86,31 +87,28 @@ def write_result_excel(rows: list[ResultRow], output_path: Path) -> None:
     ws = wb.active
     if ws is None:
         raise RuntimeError("无法创建工作表")
-    ws.title = "匹配结果"
+    _write_result_headers(ws)
     red_font = Font(color="FF0000")
-
-    # 第一行：列 1～6 单列标题，列 7「相似度匹配结果」（合并 7:10），列 11「大模型描述」
-    for col, h in enumerate(HEADER_ROW1_COLS, start=1):
-        ws.cell(row=1, column=col, value=h)
-    ws.cell(row=1, column=7, value=HEADER_SIMILARITY_TITLE)
-    ws.cell(row=1, column=11, value=HEADER_LLM_DESC)
-    # 第二行：仅第 7～10 列子标题
-    for col, h in enumerate(HEADER_ROW2_SIMILARITY, start=7):
-        ws.cell(row=2, column=col, value=h)
-
-    # 合并：前 6 列与最后 1 列合并前两行；第 7 列合并 7～10 列第一行
-    for col in (1, 2, 3, 4, 5, 6, 11):
-        ws.merge_cells(start_row=1, start_column=col, end_row=2, end_column=col)
-    ws.merge_cells(start_row=1, start_column=7, end_row=1, end_column=10)
-
-    # 数据从第 3 行起，11 列
     for row_idx, row_data in enumerate(rows, start=3):
         for col_idx, value in enumerate(row_data, start=1):
             cell = ws.cell(row=row_idx, column=col_idx, value=value)
             if len(row_data) > 5 and row_data[5] not in MATCH_SUCCESS_METHODS:
                 cell.font = red_font
-
     wb.save(output_path)
+
+
+def _write_result_headers(ws: Any) -> None:
+    """写入两行表头（合并单元格）。"""
+    ws.title = "匹配结果"
+    for col, h in enumerate(HEADER_ROW1_COLS, start=1):
+        ws.cell(row=1, column=col, value=h)
+    ws.cell(row=1, column=7, value=HEADER_SIMILARITY_TITLE)
+    ws.cell(row=1, column=11, value=HEADER_LLM_DESC)
+    for col, h in enumerate(HEADER_ROW2_SIMILARITY, start=7):
+        ws.cell(row=2, column=col, value=h)
+    for col in (1, 2, 3, 4, 5, 6, 11):
+        ws.merge_cells(start_row=1, start_column=col, end_row=2, end_column=col)
+    ws.merge_cells(start_row=1, start_column=7, end_row=1, end_column=10)
 
 
 def start_result_excel(output_path: Path) -> None:
@@ -125,16 +123,7 @@ def start_result_excel(output_path: Path) -> None:
     ws = wb.active
     if ws is None:
         raise RuntimeError("无法创建工作表")
-    ws.title = "匹配结果"
-    for col, h in enumerate(HEADER_ROW1_COLS, start=1):
-        ws.cell(row=1, column=col, value=h)
-    ws.cell(row=1, column=7, value=HEADER_SIMILARITY_TITLE)
-    ws.cell(row=1, column=11, value=HEADER_LLM_DESC)
-    for col, h in enumerate(HEADER_ROW2_SIMILARITY, start=7):
-        ws.cell(row=2, column=col, value=h)
-    for col in (1, 2, 3, 4, 5, 6, 11):
-        ws.merge_cells(start_row=1, start_column=col, end_row=2, end_column=col)
-    ws.merge_cells(start_row=1, start_column=7, end_row=1, end_column=10)
+    _write_result_headers(ws)
     wb.save(output_path)
     wb.close()
 
@@ -147,12 +136,12 @@ def append_result_rows(output_path: Path, rows: list[ResultRow]) -> None:
     if not rows:
         return
     output_path = Path(output_path)
-    red_font = Font(color="FF0000")
     wb = openpyxl.load_workbook(output_path)
     ws = wb.active
     if ws is None:
         wb.close()
         raise RuntimeError("无法打开工作表")
+    red_font = Font(color="FF0000")
     start_row = ws.max_row + 1
     for i, row_data in enumerate(rows):
         row_idx = start_row + i

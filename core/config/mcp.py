@@ -25,6 +25,6 @@ def load_mcp_config(config_path: Path | None) -> list[ServerConfig]:
         file_content = config_path.read_text(encoding="utf-8")
         parsed_json = json.loads(file_content)
         mcp_config_schema = McpConfigSchema.model_validate(parsed_json)
+        return [server for server in mcp_config_schema.servers if server.name]
     except (ValidationError, json.JSONDecodeError):
         return []
-    return [server for server in mcp_config_schema.servers if server.name]

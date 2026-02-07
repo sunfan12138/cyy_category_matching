@@ -67,8 +67,7 @@ class _FileSpanExporter:
             duration_ms = None
             if start is not None and end is not None:
                 try:
-                    duration_ns = int(end) - int(start)
-                    duration_ms = round(duration_ns / 1e6, 2)
+                    duration_ms = round((int(end) - int(start)) / 1e6, 2)
                 except (TypeError, ValueError):
                     pass
             attrs: dict[str, Any] = {}
@@ -118,16 +117,15 @@ def ensure_logfire_file_export() -> None:
     with _lock:
         if _instrumented:
             return
-        try:
-            import logfire
+        _instrumented = True
+    try:
+        import logfire
 
-            log_dir = _get_log_dir()
-            logfire.configure(send_to_logfire=False)
-            logfire.instrument_pydantic_ai()
-            if log_dir is not None:
-                _add_file_exporter_to_provider(log_dir)
-            logger.debug("Logfire 已启用（仅本地，trace 写入 log 目录）")
-        except Exception as err:
-            logger.debug("Logfire 未启用: %s", err)
-        finally:
-            _instrumented = True
+        log_dir = _get_log_dir()
+        logfire.configure(send_to_logfire=False)
+        logfire.instrument_pydantic_ai()
+        if log_dir is not None:
+            _add_file_exporter_to_provider(log_dir)
+        logger.debug("Logfire 已启用（仅本地，trace 写入 log 目录）")
+    except Exception as err:
+        logger.debug("Logfire 未启用: %s", err)

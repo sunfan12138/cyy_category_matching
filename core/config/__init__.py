@@ -186,9 +186,8 @@ def main_encrypt() -> None:
         print("输出加密后的字符串，填入 config/app_config.yaml 的 llm.api_key_encrypted。")
         sys.exit(1)
     plain_key = _parse_plain_key_from_argv()
-    encrypted_key = encrypt_key(plain_key)
     print("将下面一行填入 config/app_config.yaml 的 llm.api_key_encrypted：")
-    print(encrypted_key)
+    print(encrypt_key(plain_key))
 
 
 __all__ = [

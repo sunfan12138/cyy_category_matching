@@ -42,9 +42,8 @@ def match_rule(text: str, rule: CategoryRule) -> bool:
     for keyword in rule.must_not_contain:
         if keyword and keyword in stripped_text:
             return False
-    if rule.keyword_group_5:
-        if not any(kw and kw in stripped_text for kw in rule.keyword_group_5):
-            return False
+    if rule.keyword_group_5 and not any(kw and kw in stripped_text for kw in rule.keyword_group_5):
+        return False
     keyword_groups_1_4 = [
         rule.keyword_group_1,
         rule.keyword_group_2,
@@ -52,9 +51,8 @@ def match_rule(text: str, rule: CategoryRule) -> bool:
         rule.keyword_group_4,
     ]
     non_empty_groups = [grp for grp in keyword_groups_1_4 if grp]
-    if non_empty_groups:
-        if not any(all(kw in stripped_text for kw in grp) for grp in non_empty_groups):
-            return False
+    if non_empty_groups and not any(all(kw in stripped_text for kw in grp) for grp in non_empty_groups):
+        return False
     if not non_empty_groups and not rule.keyword_group_5:
         return False
     return True
