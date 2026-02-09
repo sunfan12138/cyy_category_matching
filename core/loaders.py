@@ -7,7 +7,7 @@ from typing import Any
 
 from tqdm import tqdm  # type: ignore[import-untyped]
 
-from .models import CategoryRule, RuleSheetMeta, VerifiedBrand
+from domain.category import CategoryRule, RuleSheetMeta, VerifiedBrand
 from .utils.excel_io import cell_value, open_excel_read
 
 KEYWORD_SEP = ",，、"

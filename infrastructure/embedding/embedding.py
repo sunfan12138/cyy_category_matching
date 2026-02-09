@@ -7,8 +7,8 @@ import logging
 import numpy as np
 from tqdm import tqdm  # type: ignore[import-untyped]
 
-from .models import VerifiedBrand
-from .utils.similarity import (
+from domain.category import VerifiedBrand
+from core.utils.similarity import (
     jaro_winkler_similarity,
     weighted_combined,
 )
@@ -58,7 +58,7 @@ def _get_model():
     from modelscope import snapshot_download  # type: ignore[import-untyped]
     from sentence_transformers import SentenceTransformer  # type: ignore[import-untyped]
 
-    from paths import get_model_dir
+    from infrastructure.config.paths import get_model_dir
 
     model_id = _embedding_config().bge_model_id
     loggers, old_levels = _suppress_third_party_logging()

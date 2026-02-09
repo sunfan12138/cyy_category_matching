@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from core.models import CategoryRule, VerifiedBrand
-from core.matching import match_rule, match_store
+from domain.category import CategoryRule, VerifiedBrand
+from application.services.matching_service import match_rule, match_store
 
 
 def test_match_rule_empty_text() -> None:

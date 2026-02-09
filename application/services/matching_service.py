@@ -6,7 +6,7 @@ from typing import Callable
 
 from models.schemas import SimilarityMatchResult
 
-from .models import CategoryRule, VerifiedBrand
+from domain.category import CategoryRule, VerifiedBrand
 
 
 def _argmax_with_threshold(
@@ -73,8 +73,8 @@ def text_similarity(
     计算两段文本的相似度，返回值在 [0, 1]。
     默认使用 BGE 余弦 + Jaro-Winkler 组合，提高准确性（语义与字面/拼写变体兼顾）。
     """
-    from .embedding import combined_similarity, cosine_similarity_0_1
-    from .utils.similarity import DEFAULT_BGE_WEIGHT
+    from infrastructure.embedding.embedding import combined_similarity, cosine_similarity_0_1
+    from core.utils.similarity import DEFAULT_BGE_WEIGHT
 
     if use_combined:
         weight = bge_weight if bge_weight is not None else DEFAULT_BGE_WEIGHT
@@ -100,7 +100,7 @@ def match_by_similarity(
 
     use_cached = any(brand.embedding is not None for brand in verified_brands)
     if use_cached:
-        from .embedding import similarity_scores_with_cached
+        from infrastructure.embedding.embedding import similarity_scores_with_cached
         scores = similarity_scores_with_cached(store_text, verified_brands)
         best = _argmax_with_threshold(scores, threshold, skip_indices=skip_empty_brand)
     else:

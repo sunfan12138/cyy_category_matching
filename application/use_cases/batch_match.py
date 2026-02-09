@@ -10,10 +10,10 @@ from core import (
     match_by_similarity,
     match_store,
 )
-from llm import get_category_description_with_search, get_category_description_with_search_async
+from infrastructure.llm import get_category_description_with_search, get_category_description_with_search_async
 from models.schemas import MatchStoreResult
 
-from .file_io import METHOD_EXCEPTION, ResultRow
+from infrastructure.io.file_io import METHOD_EXCEPTION, ResultRow
 
 logger = logging.getLogger(__name__)
 
