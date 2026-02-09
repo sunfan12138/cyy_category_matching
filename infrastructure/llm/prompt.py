@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.models import CategoryRule
+    from domain.category import CategoryRule
 
 # 基础提示：角色与任务 + 明确需求（工具说明单独放最后）
 PROMPT_BASE = """# 角色

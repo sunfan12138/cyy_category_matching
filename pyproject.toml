@@ -60,11 +60,11 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.setuptools]
-py-modules = ["main", "paths"]
+py-modules = ["main", "bootstrap"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["app*", "core*", "llm*", "mcp_client*", "models*"]
+include = ["app*", "application*", "core*", "domain*", "infrastructure*", "interface*", "models*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

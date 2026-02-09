@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.models import CategoryRule, RuleSheetMeta, VerifiedBrand
+from domain.category import CategoryRule, RuleSheetMeta, VerifiedBrand
 
 
 def test_category_rule_defaults() -> None:

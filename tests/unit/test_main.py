@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from main import (
+from interface.cli import (
     RunConfig,
     init_config,
     load_data,
@@ -66,7 +66,7 @@ class TestParseArgs:
 class TestInitConfig:
     """init_config：依赖 load_app_config，通过 mock 避免加载真实配置。"""
 
-    @patch("main.load_app_config")
+    @patch("interface.cli.load_app_config")
     def test_returns_run_config_with_injected_dirs(self, mock_load_app: MagicMock) -> None:
         with tempfile.TemporaryDirectory() as d:
             base = Path(d)
@@ -98,14 +98,14 @@ class TestLoadData:
             with pytest.raises(FileNotFoundError, match="规则文件不存在"):
                 load_data(config)
 
-    @patch("main.load_verified_brands")
-    @patch("main.load_rules")
+    @patch("interface.cli.load_verified_brands")
+    @patch("interface.cli.load_rules")
     def test_returns_rules_and_brands(
         self,
         mock_load_rules: MagicMock,
         mock_load_brands: MagicMock,
     ) -> None:
-        from core.models import CategoryRule, RuleSheetMeta, VerifiedBrand
+        from domain.category import CategoryRule, RuleSheetMeta, VerifiedBrand
 
         meta = RuleSheetMeta(logic_descriptions=[], field_descriptions=[])
         rules = [CategoryRule(atomic_category="奶茶")]
@@ -130,9 +130,9 @@ class TestLoadData:
 class TestRunMatching:
     """run_matching：依赖 run_batch_match，通过 mock 返回假结果。"""
 
-    @patch("main.run_batch_match")
+    @patch("interface.cli.run_batch_match")
     def test_returns_result_rows(self, mock_batch: MagicMock) -> None:
-        from core.models import CategoryRule, VerifiedBrand
+        from domain.category import CategoryRule, VerifiedBrand
 
         mock_batch.return_value = [
             ("LEAD001", "品类A", "一级", "code1", "原子A", "规则", "", "", "", "", ""),
@@ -148,7 +148,7 @@ class TestRunMatching:
         assert rows[0][5] == "规则"
         mock_batch.assert_called_once_with([("LEAD001", "品类A")], rules, brands)
 
-    @patch("main.run_batch_match")
+    @patch("interface.cli.run_batch_match")
     def test_empty_items_returns_empty(self, mock_batch: MagicMock) -> None:
         mock_batch.return_value = []
         rows = run_matching([], [], [])
@@ -159,7 +159,7 @@ class TestRunMatching:
 class TestSaveOutput:
     """save_output：依赖 write_result_excel，使用临时目录。"""
 
-    @patch("main.write_result_excel")
+    @patch("interface.cli.write_result_excel")
     def test_returns_output_path_and_calls_write(
         self,
         mock_write: MagicMock,
